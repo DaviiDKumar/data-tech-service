@@ -26,33 +26,42 @@ export default function UploadPage() {
     if(uploadResults) setUploadResults(null); 
   };
 
-  const handleUpload = async () => {
-    if (selectedFiles.length === 0) return;
-    
-    setIsUploading(true);
-    setProgress(30);
-    
+ const handleUpload = async () => {
+  if (selectedFiles.length === 0) return;
+  
+  setIsUploading(true);
+  let uploadedCount = 0;
+  const total = selectedFiles.length;
+
+  // Instead of one big bulk call, we loop through them
+  // This prevents Vercel's 15-second timeout
+  for (const file of selectedFiles) {
     const formData = new FormData();
-    selectedFiles.forEach(f => formData.append("files", f));
-    
-    setProgress(70);
+    formData.append("files", file); // Your action expects 'files' array
+
     const result = await uploadBulkResumes(formData);
     
-    setProgress(100);
+    if (result.success) {
+      uploadedCount++;
+      // Update progress based on actual file completion
+      setProgress(Math.round((uploadedCount / total) * 100));
+    } else {
+      console.error(`Failed to upload ${file.name}:`, result.error);
+    }
+  }
 
-    // Short delay for smooth animation
-    setTimeout(() => {
-      setUploadResults(result);
-      setIsUploading(false);
-      setProgress(0);
-      setSelectedFiles([]); 
-      
-      // Input ko reset karna taaki same file dobara select ho sake
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }, 600);
-  };
+  // Finish up
+  setTimeout(() => {
+    setUploadResults({ success: true, count: uploadedCount });
+    setIsUploading(false);
+    setProgress(0);
+    setSelectedFiles([]); 
+    
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }, 600);
+};
 
   return (
     <div className="p-6 md:p-10 max-w-5xl mx-auto space-y-8 bg-slate-50 min-h-screen">
