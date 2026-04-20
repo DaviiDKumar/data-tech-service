@@ -2,15 +2,15 @@
 import { useState, useEffect, useCallback } from "react";
 import { getResumes } from "@/app/actions/resume";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  FileText, 
-  ChevronLeft, 
-  ChevronRight, 
-  Eye, 
-  Database, 
-  Search, 
-  Loader2, 
-  X 
+import {
+  FileText,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  Database,
+  Search,
+  Loader2,
+  X
 } from "lucide-react";
 
 export default function ResumesPage() {
@@ -53,7 +53,7 @@ export default function ResumesPage() {
 
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-6 bg-slate-50 min-h-screen text-slate-900">
-      
+
       {/* --- HEADER --- */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-8">
         <div>
@@ -68,7 +68,7 @@ export default function ResumesPage() {
         <div className="flex items-center gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input 
+            <input
               type="text"
               value={search}
               onChange={handleSearchChange}
@@ -81,7 +81,7 @@ export default function ResumesPage() {
               </button>
             )}
           </div>
-          
+
           <div className="bg-white border border-slate-200 px-4 py-2 rounded-2xl shadow-sm flex items-center gap-2">
             <Database size={14} className="text-blue-600" />
             <span className="text-xs font-black">{totalCount} Records</span>
@@ -91,11 +91,11 @@ export default function ResumesPage() {
 
       {/* --- TABLE CONTAINER --- */}
       <div className="bg-white border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden relative">
-        
+
         {/* Loader Overlay */}
         <AnimatePresence>
           {loading && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -124,7 +124,7 @@ export default function ResumesPage() {
               <AnimatePresence mode="popLayout">
                 {resumes.length > 0 ? (
                   resumes.map((res, i) => (
-                    <motion.tr 
+                    <motion.tr
                       key={res._id}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -157,9 +157,9 @@ export default function ResumesPage() {
                         </span>
                       </td>
                       <td className="p-5 text-right">
-                        <a 
-                          href={res.fileUrl} 
-                          target="_blank" 
+                        <a
+                          href={res.fileData} // Change this from fileUrl to fileData
+                          target="_blank"
                           rel="noreferrer"
                           className="inline-flex items-center gap-2 text-blue-600 hover:bg-blue-600 hover:text-white px-4 py-2 rounded-xl transition-all border border-blue-100 shadow-sm active:scale-95"
                         >
@@ -186,7 +186,7 @@ export default function ResumesPage() {
 
         {/* --- PAGINATION --- */}
         <div className="p-6 bg-slate-50/50 border-t border-slate-200 flex items-center justify-between">
-          <button 
+          <button
             disabled={page === 1 || loading}
             onClick={() => setPage(p => p - 1)}
             className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 disabled:opacity-20 hover:text-blue-600 transition-all group"
@@ -199,18 +199,17 @@ export default function ResumesPage() {
               <button
                 key={i}
                 onClick={() => setPage(i + 1)}
-                className={`w-9 h-9 rounded-xl text-[10px] font-black transition-all ${
-                  page === i + 1 
-                  ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20 scale-110' 
-                  : 'bg-white border border-slate-200 text-slate-400 hover:border-blue-400'
-                }`}
+                className={`w-9 h-9 rounded-xl text-[10px] font-black transition-all ${page === i + 1
+                    ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20 scale-110'
+                    : 'bg-white border border-slate-200 text-slate-400 hover:border-blue-400'
+                  }`}
               >
                 {i + 1}
               </button>
             ))}
           </div>
 
-          <button 
+          <button
             disabled={page === totalPages || loading}
             onClick={() => setPage(p => p + 1)}
             className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 disabled:opacity-20 hover:text-blue-600 transition-all group"

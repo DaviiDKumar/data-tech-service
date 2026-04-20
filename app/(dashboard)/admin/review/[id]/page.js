@@ -87,7 +87,7 @@ function AdminReviewDetailContent() {
         {/* LEFT: PDF PREVIEW */}
         <section className="w-1/2 bg-slate-50 p-6 overflow-y-auto border-r border-slate-200">
            <div className="bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border-8 border-white h-fit sticky top-0">
-              <iframe src={`${detail?.resumeId?.fileUrl}#toolbar=0`} className="w-full h-[180vh]" title="Review PDF" />
+              <iframe src={`${detail?.resumeId?.fileData}#toolbar=0`} className="w-full h-[180vh]" title="Review PDF" />
            </div>
         </section>
 

@@ -160,7 +160,7 @@ function WorkspaceContent() {
                     className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 disabled:bg-slate-100 disabled:text-slate-400 transition-all shadow-lg"
                 >
                     {isActionLoading ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                    Force Sync
+                    Force Sync NOW
                 </button>
             </header>
 
@@ -169,10 +169,11 @@ function WorkspaceContent() {
                 <section className="w-1/2 bg-slate-50 overflow-y-auto p-6 border-r border-slate-200 shadow-inner">
                     <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border-4 border-white">
                         <iframe
-                            src={`${resume?.fileUrl}#toolbar=0`}
+                            src={`${resume?.fileData}#toolbar=0`}
                             className="w-full h-[180vh]"
                             title="Resume Preview"
                         />
+
                     </div>
                 </section>
 
