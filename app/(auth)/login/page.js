@@ -1,11 +1,12 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { loginUser } from '@/app/actions/auth'; 
 import Link from 'next/link';
-import { Loader2, ShieldCheck, AlertCircle } from 'lucide-react'; // Icons for better UI
+import { Loader2, ShieldCheck, AlertCircle } from 'lucide-react';
 
-export default function LoginPage() {
+// 1. Logic Component
+function LoginForm() {
   const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -15,11 +16,9 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const message = searchParams.get('message');
 
-  // ESLint Fix: Dependency array mein error aur variables ko handle kiya
   useEffect(() => {
     if (error) setError('');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loginId, password]); 
+  }, [loginId, password, error]); 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -34,7 +33,6 @@ export default function LoginPage() {
       const res = await loginUser(formData);
 
       if (res.success) {
-        // Simple & Fast Redirect
         router.push(res.role === 'admin' ? '/admin' : '/user');
         router.refresh();
       } else {
@@ -49,7 +47,6 @@ export default function LoginPage() {
 
   return (
     <div className="w-full max-w-md mx-auto px-4">
-      {/* Brand Section */}
       <div className="text-center mb-10">
         <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-3xl shadow-xl shadow-blue-500/20 mb-6">
           <ShieldCheck className="text-white w-8 h-8" />
@@ -62,7 +59,6 @@ export default function LoginPage() {
         </p>
       </div>
 
-      {/* Alerts */}
       <div className="min-h-15">
         {message && (
           <div className="mb-6 p-4 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-2xl border border-emerald-100 flex items-center gap-3">
@@ -79,7 +75,6 @@ export default function LoginPage() {
         )}
       </div>
 
-      {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-1.5">
           <label className="text-[10px] font-black uppercase text-slate-400 ml-1 tracking-widest">
@@ -124,7 +119,6 @@ export default function LoginPage() {
         </button>
       </form>
 
-      {/* Footer */}
       <div className="mt-12 text-center">
         <Link 
           href="/register" 
@@ -134,5 +128,18 @@ export default function LoginPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+// 2. Final Export with Suspense wrapper
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="animate-spin w-8 h-8 text-blue-600" />
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }
