@@ -69,7 +69,7 @@ export default function UploadPage() {
       {/* --- HEADER --- */}
       <div className="flex flex-col gap-1 border-b border-slate-200 pb-6">
         <h1 className="text-3xl font-bold text-slate-900">
-          Upload <span className="text-blue-600">Resumes</span>
+          Upload <span className="text-blue-600">Resumes Page</span>
         </h1>
         <p className="text-sm text-slate-500 font-medium italic">
           Bulk upload PDF files directly to the system pool
