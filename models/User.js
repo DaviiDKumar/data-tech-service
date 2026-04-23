@@ -28,6 +28,7 @@ const UserSchema = new mongoose.Schema({
     approvedCount: { type: Number, default: 0 },
     rejectedCount: { type: Number, default: 0 },
     assignedCount: { type: Number, default: 0 },
+    reviewCount: { type: Number, default: 0 },
   },
 
   // --- Status Trackers ---

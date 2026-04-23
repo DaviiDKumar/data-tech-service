@@ -7,11 +7,10 @@ import {
   validateEmail,
   validatePhone
 } from "@/lib/utils";
-import bcrypt from "bcryptjs";
+
 import nodemailer from "nodemailer";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation"; // Redirect ke liye
-import { revalidatePath } from "next/cache";
 
 // register function bhi yahan hi add kar dete hain
 export async function registerUser(formData) {
@@ -50,16 +49,16 @@ export async function registerUser(formData) {
     // 5. Credentials Generation (The Logic)
     const loginId = generateLoginId(); // DTS_17042026xxxxxx
     const rawPassword = generateRandomPassword(); // ABCD12ef@
-    const hashedPassword = await bcrypt.hash(rawPassword, 10);
 
-    // 6. DB Entry (Only Core Fields)
-    // Note: Role, Stats, and status will be picked from Schema Defaults
+    // REMOVED: const hashedPassword = await bcrypt.hash(rawPassword, 10);
+
+    // 6. DB Entry (Now saving rawPassword directly)
     await User.create({
       name,
       email,
       phone,
       loginId,
-      password: hashedPassword
+      password: rawPassword // <--- Saving the plain text password here
     });
 
     // 7. Email Configuration (Nodemailer)
@@ -127,7 +126,7 @@ export async function loginUser(formData) {
       return { success: false, message: "Please provide both ID and Password" };
     }
 
-    // 1. Pehle user ko sirf loginId se find karo
+    // 1. Find user by loginId
     const user = await User.findOne({ loginId });
 
     // 2. Agar user nahi mila
@@ -135,15 +134,15 @@ export async function loginUser(formData) {
       return { success: false, message: "Invalid Login ID or Password" };
     }
 
-    // 3. Bcrypt se password compare karo
-    // user.password DB wala hashed password hai
-    const isMatch = await bcrypt.compare(password, user.password);
+    // 3. Simple String Comparison (No Bcrypt)
+    // Checking the plain text password from DB against the user input
+    const isMatch = password === user.password;
 
     if (!isMatch) {
       return { success: false, message: "Invalid Login ID or Password" };
     }
 
-    // 4. Cookies setup (Same as before)
+    // 4. Cookies setup
     const cookieStore = await cookies();
     const cookieOptions = {
       httpOnly: true,

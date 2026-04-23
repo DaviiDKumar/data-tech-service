@@ -24,7 +24,7 @@ const ResumeInstanceSchema = new mongoose.Schema({
   // --- WORKFLOW STATUS ---
   status: {
     type: String,
-    enum: ["default", "in-progress", "submitted", "pending", "approved", "rejected", "re-assigned"],
+    enum: ["default", "in-progress", "submitted", "saved", "approved", "rejected", "re-assigned", "review"],
     default: "default"
   },
 
@@ -46,6 +46,10 @@ const ResumeInstanceSchema = new mongoose.Schema({
 
 // Prevention: Ek user ek resume par dubara entry nahi kar sakta
 ResumeInstanceSchema.index({ resumeId: 1, userId: 1 }, { unique: true });
+// Add these at the bottom of your ResumeInstance Schema file
+ResumeInstanceSchema.index({ status: 1 });
+
+ResumeInstanceSchema.index({ updatedAt: -1 }); // Crucial for fast "Latest First" sorting
 
 export default mongoose.models.ResumeInstance ||
   mongoose.model("ResumeInstance", ResumeInstanceSchema, "resumeinstances");

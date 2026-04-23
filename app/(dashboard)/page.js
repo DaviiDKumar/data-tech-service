@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCookie } from 'cookies-next';
+import { passeroOne } from '@/lib/fonts';
 
 export default function RootDashboardPage() {
   const router = useRouter();
@@ -20,13 +21,38 @@ export default function RootDashboardPage() {
   }, [router]);
 
   return (
-    <div className="h-[80vh] flex flex-col items-center justify-center gap-4">
-      <div className="w-12 h-12 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin"></div>
+    <div className={`h-screen bg-gray-200 flex flex-col items-center justify-center gap-6 ${passeroOne.className}`}>
+      
+      {/* Premium Monochromatic Loader */}
+      <div className="relative w-16 h-16">
+        {/* Outer Ring */}
+        <div className="absolute inset-0 border-[3px] border-white/10 rounded-full"></div>
+        {/* Spinning Top Border */}
+        <div className="absolute inset-0 border-[3px] border-t-white border-transparent rounded-full animate-spin"></div>
+        
+        {/* Center Static Dot */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+        </div>
+      </div>
+
       <div className="text-center">
-        <p className="text-[10px] font-black text-white uppercase tracking-[5px] animate-pulse">
-          Routing to Workspace
+        {/* Main Text - Lowercase as per your style preference */}
+        <p className="text-sm text-white tracking-[0.2em] animate-pulse">
+          routing to workspace
         </p>
-        <p className="text-[8px] text-slate-500 font-bold uppercase mt-2">Initializing Secure Session...</p>
+        
+        {/* Subtext */}
+        <p className="text-[10px] text-white/40 font-sans uppercase tracking-widest mt-3">
+          Initializing Secure Session
+        </p>
+      </div>
+
+      {/* Decorative "F." Logo style watermark at bottom */}
+      <div className="absolute bottom-12 opacity-20">
+        <div className="w-8 h-8 border border-white rounded-lg flex items-center justify-center">
+          <span className="text-white text-xs">D.</span>
+        </div>
       </div>
     </div>
   );

@@ -1,10 +1,12 @@
 "use server";
+import { writeFile, mkdir } from "fs/promises";
+import path from "path";
 import connectDB from "@/lib/db";
 import Resume from "@/models/Resume";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import cloudinary from "@/lib/cloudinary"
 
-// We no longer need fs or path because we are not saving to a local folder!
 
 export async function uploadBulkResumes(formData) {
   try {
@@ -15,58 +17,74 @@ export async function uploadBulkResumes(formData) {
     const files = formData.getAll('files');
     if (!files || files.length === 0) return { success: false, error: "No files found." };
 
-    // 1. Get existing filenames to prevent duplicates
+    // 1. Prevent Duplicates based on Filename (Same as before)
     const existingFiles = await Resume.find({}, { originalName: 1 }).lean();
     const existingFileNames = new Set(existingFiles.map(f => f.originalName));
     const newFiles = files.filter(file => !existingFileNames.has(file.name));
 
     if (newFiles.length === 0) {
-      return { 
-        success: false, 
-        duplicateCount: files.length, 
-        totalSelected: files.length, 
-        message: "All files are duplicates." 
+      return {
+        success: false,
+        duplicateCount: files.length,
+        message: "All selected files already exist in the database."
       };
     }
 
-    // 2. Get the starting Resume Number
+    // 2. Get Starting Resume Number
     const lastResume = await Resume.findOne().sort({ resumeNo: -1 }).lean();
     let startNo = lastResume && !isNaN(lastResume.resumeNo) ? Number(lastResume.resumeNo) + 1 : 1;
 
-    // 3. Process Files & Convert to Base64 (The Vercel Fix)
+    // 3. Process and Upload to Cloudinary
     const resumeEntries = await Promise.all(newFiles.map(async (file, index) => {
       const bytes = await file.arrayBuffer();
       const buffer = Buffer.from(bytes);
-      
-      // Convert buffer to a Base64 Data URI string
-      const base64Data = `data:${file.type};base64,${buffer.toString('base64')}`;
+
+      // Upload to Cloudinary using a Promise
+      const cloudinaryResponse = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          {
+            folder: "Data_tech_resumes",
+            resource_type: "image",
+            // This tells Cloudinary: "I know I said image, but treat it as a PDF"
+            format: "pdf",
+            flags: "attachment:false", // Force it NOT to be a download
+            public_id: `${Date.now()}-${file.name.replaceAll(" ", "_").split('.')[0]}`,
+          },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          }
+        ).end(buffer);
+      });
 
       return {
         resumeNo: startNo + index,
         uniqueId: crypto.randomUUID(),
         originalName: file.name,
-        fileData: base64Data, // This replaces the physical file on disk
-        fileUrl: "", // We can leave this empty or use it for frontend routing
+        fileData: "Cloudinary Hosted",
+        fileUrl: cloudinaryResponse.secure_url, // URL from Cloudinary
         fileType: file.type || "application/pdf",
         fileSize: `${(file.size / 1024).toFixed(2)} KB`,
         isAvailable: true,
         totalHits: 0,
         uploadedBy: adminId || null,
+        cloudinary_id: cloudinaryResponse.public_id, // Store this to delete later if needed
       };
     }));
 
-    // 4. Save to DB (Atlas)
-    await Resume.insertMany(resumeEntries);
-    
+    // 4. Save Metadata to Atlas
+    const savedDocs = await Resume.insertMany(resumeEntries);
+
     revalidatePath("/admin/upload");
     revalidatePath("/admin/resumes");
 
-    return { 
-      success: true, 
-      count: newFiles.length, 
+    return {
+      success: true,
+      count: savedDocs.length,
       duplicateCount: files.length - newFiles.length,
       totalSelected: files.length,
-      message: `${newFiles.length} Resumes saved directly to Database Successfully.` 
+      data: JSON.parse(JSON.stringify(savedDocs)),
+      message: `${savedDocs.length} Resumes uploaded to Cloudinary & saved successfully.`
     };
 
   } catch (error) {
@@ -91,8 +109,6 @@ export async function getResumes(page = 1, limit = 5, search = "") {
     }
 
     const [resumes, total] = await Promise.all([
-      // We use .select('-fileData') here to keep the list fetch fast. 
-      // You only fetch fileData when you actually want to view the PDF.
       Resume.find(query).select('-fileData').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       Resume.countDocuments(query)
     ]);

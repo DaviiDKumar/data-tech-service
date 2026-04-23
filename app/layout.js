@@ -1,7 +1,5 @@
-import { Inter } from "next/font/google";
 import "./globals.css";
-
-const inter = Inter({ subsets: ["latin"] });
+import { passero, robotoSlab, ubuntu } from "@/lib/fonts";
 
 export const metadata = {
   title: "DATATECHSERVICES | Data Processing System",
@@ -9,8 +7,8 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${inter.className} bg-[#09090b] text-white antialiased`}>
+    <html lang="en" className={`dark ${passero.variable} ${robotoSlab.variable} ${ubuntu.variable}`}>
+      <body className={`${ubuntu.className} bg-[#09090b] text-white antialiased`}>
         {children}
       </body>
     </html>

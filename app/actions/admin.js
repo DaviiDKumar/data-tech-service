@@ -4,6 +4,7 @@ import User from "@/models/User";
 import ResumeInstance from "@/models/ResumeInstance";
 import Kyc from "@/models/Kyc";
 import { revalidatePath } from "next/cache";
+import Resume from "@/models/Resume";
 
 
 
@@ -37,7 +38,7 @@ export async function getAllUsers() {
 
 
 //sare submitted reusmes ajynge data ke sath 
-export async function getAdminReports(statusFilter = ["submitted", "approved", "rejected"]) {
+export async function getAdminReports(statusFilter = ["submitted", "approved", "rejected", "review"]) {
   try {
     await connectDB();
 
@@ -71,7 +72,7 @@ export async function getAdminReports(statusFilter = ["submitted", "approved", "
 //approve /reject in bulk resume 
 export async function bulkUpdateResumeStatus(instanceIds, newStatus) {
   try {
-    const validStatuses = ["default", "in-progress", "submitted", "pending", "approved", "rejected", "re-assigned"];
+    const validStatuses = ["default", "in-progress", "submitted", "pending", "approved", "rejected", "re-assigned", "review"];
     if (!validStatuses.includes(newStatus)) {
       throw new Error("Invalid status update requested");
     }
@@ -134,71 +135,87 @@ export async function getReassignableResumes(targetUserId) {
   try {
     await connectDB();
 
-    // Pehle wo saare resumes lao jo Approved hain
+    // 1. Get all unique Resume IDs that have been approved by anyone in the system
     const approvedInstances = await ResumeInstance.find({ status: "approved" })
       .populate("resumeId", "originalName fileUrl")
       .lean();
 
-    // Wo resumes nikalo jo target user pehle hi touch kar chuka hai
-    const userTouchedResumes = await ResumeInstance.find({ userId: targetUserId })
+    // 2. Get all resumes already handled by the target user (submitted, rejected, etc.)
+    const userExistingInstances = await ResumeInstance.find({ userId: targetUserId })
       .select("resumeId")
       .lean();
 
-    const touchedIds = userTouchedResumes.map(r => r.resumeId.toString());
+    // Create a Set of IDs for O(1) lookup performance
+    const touchedResumeIds = new Set(
+      userExistingInstances.map(inst => inst.resumeId.toString())
+    );
 
-    // Ab har resume ke saath "isLocked" flag bhejenge
-    const processedData = approvedInstances.map(inst => ({
-      ...inst,
-      isLocked: touchedIds.includes(inst.resumeId._id.toString())
-    }));
+    // 3. Process the data
+    const processedData = approvedInstances.map(inst => {
+      const resumeIdStr = inst.resumeId._id.toString();
 
-    return { success: true, data: JSON.parse(JSON.stringify(processedData)) };
+      return {
+        ...inst,
+        // LOCK only if this specific Resume ID is already in the target user's history
+        isLocked: touchedResumeIds.has(resumeIdStr)
+      };
+    });
+
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(processedData))
+    };
   } catch (error) {
+    console.error("Fetch Reassignable Error:", error);
     return { success: false, error: error.message };
   }
 }
-
 //Final Reassign Action
 export async function executeBulkReassign(targetUserId, sourceInstances) {
   try {
     await connectDB();
 
-    // 1. New instances prepare karo
+    // 1. Filter out any instances that might have been tampered with or are duplicates
     const newInstances = sourceInstances.map(inst => ({
       resumeId: inst.resumeId._id,
       userId: targetUserId,
-      formData: inst.formData,
-      status: "re-assigned", // Special status for tracking
+      formData: inst.formData, // Pre-filled data from the approved source
+      status: "re-assigned",
       isTouched: true,
       startedAt: new Date(),
     }));
 
-    // 2. Database mein records insert karo
-    await ResumeInstance.insertMany(newInstances);
+    // 2. Bulk Insert
+    if (newInstances.length > 0) {
+      await ResumeInstance.insertMany(newInstances);
 
-    // --- 🔥 USER STATS SYNC ---
-    // User ke assignedCount aur inProgressCount dono ko bulk mein update karo
-    await User.findByIdAndUpdate(targetUserId, {
-      $inc: {
-        "stats.assignedCount": newInstances.length,
-      }
-    });
+      // 3. Update User Stats
+      await User.findByIdAndUpdate(targetUserId, {
+        $inc: {
+          "stats.assignedCount": newInstances.length,
+          // We increment inProgress because re-assigned items 
+          // usually appear in the user's active workspace
+          "stats.inProgressCount": newInstances.length
+        }
+      });
+    }
 
-    revalidatePath("/user");
-    revalidatePath("/admin");
-
-
+    revalidatePath("/admin/reassign");
+    revalidatePath("/user/dashboard");
 
     return {
       success: true,
-      message: `Successfully re-assigned ${newInstances.length} resumes and updated user stats.`
+      message: `Successfully allocated ${newInstances.length} resumes.`
     };
   } catch (error) {
     console.error("Bulk Re-assign Error:", error);
+    // Handle Duplicate Key Error (Index: resumeId_1_userId_1)
+    if (error.code === 11000) {
+      return { success: false, error: "One or more resumes are already assigned to this user." };
+    }
     return { success: false, error: error.message };
   }
 }
-
 
 //kyc routes hai ab 
 
@@ -223,7 +240,7 @@ export async function getAllKycRequests() {
   }
 }
 
-
+// kyc stsus update krega
 export async function updateComplianceStatus(kycId, type, status, remarks = "") {
   try {
     await connectDB();
@@ -257,6 +274,84 @@ export async function updateComplianceStatus(kycId, type, status, remarks = "") 
     return { success: true, message: `Status updated to ${status}` };
   } catch (error) {
     console.error("❌ Sync Error:", error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+
+
+
+// stsuts fetch krega
+export async function fetchAdminLiveStats() {
+  try {
+    await connectDB();
+
+    const result = await ResumeInstance.aggregate([
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          appr: { $sum: { $cond: [{ $eq: ["$status", "approved"] }, 1, 0] } },
+          rejt: { $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] } },
+          prog: { $sum: { $cond: [{ $eq: ["$status", "in-progress"] }, 1, 0] } },
+          subm: { $sum: { $cond: [{ $eq: ["$status", "submitted"] }, 1, 0] } },
+        }
+      }
+    ]);
+
+    const data = result[0] || { total: 0, appr: 0, rejt: 0, prog: 0, subm: 0 };
+    const usersCount = await User.countDocuments({ role: 'user' });
+
+    // Accuracy Logic: Appr / (Appr + Rejt)
+    const finalized = data.appr + data.rejt;
+    const accuracy = finalized > 0 ? Math.round((data.appr / finalized) * 100) : 0;
+
+    return {
+      success: true,
+      totalResumes: data.total,
+      approved: data.appr,
+      rejected: data.rejt,
+      inProgress: data.prog,
+      pending: data.subm,
+      globalAccuracy: accuracy,
+      activeUsersCount: usersCount
+    };
+  } catch (err) {
+    console.error("Action Error:", err);
+    return { success: false, error: err.message };
+  }
+}
+
+
+// auto saved wla 
+
+export async function getAdminSavedResumes(statusFilter = ["saved", "in-progress", "re-assigned", "review"]) {
+  try {
+    await connectDB();
+
+    // Query: Sirf wahi status lao jo admin ne mange hain
+    const query = {
+      status: { $in: statusFilter }
+    };
+
+    const results = await ResumeInstance.find(query)
+      .populate({
+        path: "resumeId",
+        select: "originalName fileUrl fileKey" // Resume se PDF URL aur naam
+      })
+      .populate({
+        path: "userId",
+        select: "name email" // User se naam aur email
+      })
+      .sort({ updatedAt: -1 }) // Latest updates sabse upar
+      .lean();
+
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(results))
+    };
+  } catch (error) {
+    console.error("Admin Fetch Error:", error);
     return { success: false, error: error.message };
   }
 }

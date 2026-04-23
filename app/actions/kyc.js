@@ -4,9 +4,8 @@ import connectDB from "@/lib/db";
 import Kyc from "@/models/Kyc";
 import mongoose from "mongoose"; // Isse ObjectId convert karenge
 import { revalidatePath } from "next/cache";
-import fs from "fs/promises";
-import path from "path";
-
+import cloudinary from "@/lib/cloudinary";
+import { uploadToCloudinary } from "@/lib/cloudinary";
 
 
 export async function submitBankDetails(userId, bankPayload) {
@@ -51,44 +50,35 @@ export async function submitBankDetails(userId, bankPayload) {
 }
 
 
+
+/**
+ * Helper: Uploads buffer to Cloudinary with PDF-friendly settings
+ */
+
+/**
+ * Main Action: Handles both File Uploads and DB Updates
+ */
 export async function submitKycWithFiles(userId, formData) {
   try {
     await connectDB();
+    if (!userId) throw new Error("User ID is missing");
 
     const idFile = formData.get("idFile");
     const addrFile = formData.get("addrFile");
-    const idNumber = formData.get("idNumber");
-    const idType = formData.get("idType");
 
-    // 1. Create Directory if not exists
-    const uploadDir = path.join(process.cwd(), "public/kyc");
-    await fs.mkdir(uploadDir, { recursive: true });
+    // Parallel upload to Cloudinary for speed
+    const [idFileUrl, addrFileUrl] = await Promise.all([
+      uploadToCloudinary(idFile, userId, "id_proof"),
+      uploadToCloudinary(addrFile, userId, "address_proof")
+    ]);
 
-    let idFileUrl = "";
-    let addrFileUrl = "";
+    const userObjectId = new mongoose.Types.ObjectId(userId);
 
-    // 2. Save ID Proof File
-    if (idFile && idFile.size > 0) {
-      const idFileName = `${userId}_id_${Date.now()}_${idFile.name}`;
-      const buffer = Buffer.from(await idFile.arrayBuffer());
-      await fs.writeFile(path.join(uploadDir, idFileName), buffer);
-      idFileUrl = `/kyc/${idFileName}`; // Public URL
-    }
-
-    // 3. Save Address Proof File
-    if (addrFile && addrFile.size > 0) {
-      const addrFileName = `${userId}_addr_${Date.now()}_${addrFile.name}`;
-      const buffer = Buffer.from(await addrFile.arrayBuffer());
-      await fs.writeFile(path.join(uploadDir, addrFileName), buffer);
-      addrFileUrl = `/kyc/${addrFileName}`;
-    }
-
-    // 4. Update Database
     const updateData = {
-      userId,
+      userId: userObjectId,
       "documents.idProof": {
-        idType,
-        idNumber,
+        idType: formData.get("idType"),
+        idNumber: formData.get("idNumber"),
         fileUrl: idFileUrl || formData.get("existingIdUrl"),
       },
       "documents.addressProof": {
@@ -100,16 +90,22 @@ export async function submitKycWithFiles(userId, formData) {
       lastUpdated: new Date(),
     };
 
-    await Kyc.findOneAndUpdate({ userId }, { $set: updateData }, { upsert: true });
+    // Upsert logic: Create if new, update if exists
+    await Kyc.findOneAndUpdate(
+      { userId: userObjectId }, 
+      { $set: updateData }, 
+      { upsert: true, runValidators: true }
+    );
 
     revalidatePath("/user/profile");
-    return { success: true, message: "Files saved to local storage & DB updated!" };
+    return { success: true, message: "KYC Documents securely stored in Cloudinary." };
 
   } catch (error) {
-    console.error("Upload Error:", error);
+    console.error("KYC Submission Error:", error);
     return { success: false, error: error.message };
   }
 }
+
 
 export async function getKycRecord(userId) {
     try {

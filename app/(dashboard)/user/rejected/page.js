@@ -49,14 +49,14 @@ function UserRejectedContent() {
   );
 
   if (loading) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-white gap-4">
+    <div className="h-screen flex flex-col items-center justify-center  gap-4">
       <Loader2 className="animate-spin text-red-600" size={40} />
       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Loading Rejected Files...</p>
     </div>
   );
 
   return (
-    <div className="p-8 md:p-12 max-w-6xl mx-auto min-h-screen bg-white font-sans">
+    <div className="p-8 md:p-12 max-w-6xl mx-auto min-h-screen  font-sans">
       
       {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-16">

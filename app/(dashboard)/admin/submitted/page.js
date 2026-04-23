@@ -122,6 +122,9 @@ function AdminSubmittedContent() {
             <button onClick={() => handleAction('rejected')} className="flex items-center gap-2 px-6 py-3 bg-red-500 text-white rounded-2xl text-[10px] font-black uppercase hover:bg-red-600 transition-all">
               <XCircle size={14} /> Reject
             </button>
+            <button onClick={() => handleAction('review')} className="flex items-center gap-2 px-6 py-3 bg-red-500 text-white rounded-2xl text-[10px] font-black uppercase hover:bg-red-600 transition-all">
+              <XCircle size={14} /> ReView
+            </button>
           </div>
         )}
       </div>
@@ -210,6 +213,10 @@ function AdminSubmittedContent() {
                       </button>
                       <button onClick={() => bulkUpdateResumeStatus([item._id], 'rejected').then(() => refreshData())} className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-all">
                         <XCircle size={20} />
+                      </button>
+                      <button onClick={() => bulkUpdateResumeStatus([item._id], 'review').then(() => refreshData())} className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-all">
+                        R
+                       
                       </button>
                    </div>
                  )}

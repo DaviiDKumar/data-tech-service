@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import ClientInitializer from "@/components/ClientInitializer";
 import connectDB from "@/lib/db";
 import User from "@/models/User";
+import { passero } from "@/lib/fonts"; // Import your passero font
 
 export default async function DashboardLayout({ children }) {
   const cookieStore = await cookies();
@@ -17,18 +18,17 @@ export default async function DashboardLayout({ children }) {
   if (userId) {
     const userDoc = await User.findById(userId).select("-password").lean();
     if (userDoc) {
-      // MongoDB Object ko plain JavaScript object mein convert karna (for Next.js props)
       fullUser = JSON.parse(JSON.stringify(userDoc));
     }
   }
 
-  // 2. Fallback data agar DB fail ho jaye ya user na mile
+  // 2. User Data Mapping
   const userData = fullUser ? {
     id: fullUser._id,
     role: fullUser.role,
     name: fullUser.name,
     email: fullUser.email,
-    stats: fullUser.stats || {}, // Stats ab available honge
+    stats: fullUser.stats || {},
     kycStatus: fullUser.kycStatus || 'pending',
     bankDetailsStatus: fullUser.bankDetailsStatus || 'pending',
     kycDetails: fullUser.kycDetails || {},
@@ -40,37 +40,45 @@ export default async function DashboardLayout({ children }) {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc]">
-      {/* 1. Bridge: Server data to Zustand (Ab isme stats bhi hain!) */}
+    <div className="flex min-h-screen bg-gray-200 text-black">
+      {/* 1. Bridge: Server data to Zustand */}
       <ClientInitializer user={userData} />
 
-      {/* 2. Sidebar: Passing initial data as props */}
+      {/* 2. Sidebar: Width w-54 + left-6 padding = ml-72 for main content */}
       <Sidebar initialUser={userData} />
 
-      <main className="flex-1 ml-64 flex flex-col">
-        <header className="h-16 border-b flex items-center justify-between px-8 sticky top-0 z-40 bg-white/80 backdrop-blur-md">
-          <div className="text-xs font-black text-slate-400 uppercase tracking-widest">
-            Growthforge Data Service
+      {/* 3. Main Content: Margin-left 72 to give room to floating sidebar */}
+      <main className="flex-1 ml-54 flex flex-col transition-all duration-500">
+        
+        {/* Header: Transparent with Blur */}
+        <header className="h-20 flex items-center border-b-2 border-slate-300  justify-between px-10 sticky top-0 z-40 backdrop-blur-xl ">
+          <div className={`${passero.className} text-[12px] text-black uppercase tracking-[4px]`}>
+            DATATECH SERVICE
           </div>
-          <div className="flex items-center gap-4">
-             {/* Stats Preview in Header (Optional) */}
-             <div className="hidden md:flex items-center gap-4 border-r pr-4 border-slate-100">
-                <div className="text-right">
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Done</p>
-                    <p className="text-xs font-bold text-emerald-600">{userData.stats?.approvedCount || 0}</p>
-                </div>
-             </div>
 
-             <div className="flex items-center gap-3 font-bold text-sm text-slate-800">
-               {userData.name}
-               <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white text-[10px] font-black italic">
-                 {userData.role === 'admin' ? 'AD' : 'US'}
+          <div className="flex items-center gap-6">
+             {/* Stats Preview: Monochromatic style */}
+            
+
+             {/* User Info */}
+             <div className="flex items-center gap-3">
+               <div className="text-right">
+                  <p className={`${passero.className} text-xs text-black leading-none`}>
+                    {userData.name}
+                  </p>
+                  <p className="text-[9px] text-black/40 font-bold uppercase tracking-widest mt-1">
+                    {userData.role} Account
+                  </p>
                </div>
+             
              </div>
           </div>
         </header>
 
-        <div className="p-8">{children}</div>
+        {/* Content Body */}
+        <div className="">
+          {children}
+        </div>
       </main>
     </div>
   );

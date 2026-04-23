@@ -3,11 +3,15 @@
 // ---- Imports ----
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { loginUser } from '@/app/actions/auth'; 
+import { loginUser } from '@/app/actions/auth';
 import Link from 'next/link';
-import { Loader2, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Loader2, Terminal, Eye, EyeOff } from 'lucide-react';
+import { passero, ubuntu, robotoSlab } from "@/lib/fonts";
+
+// Inside your component:
 
 // ---- Main Login Form Component ----
+
 export default function LoginForm() {
 
   // ---- State ----
@@ -15,11 +19,12 @@ export default function LoginForm() {
   const [password, setPassword] = useState('');     // stores password input
   const [error, setError] = useState('');           // stores error message to display
   const [loading, setLoading] = useState(false);    // controls loading spinner on button
-  
+
   // ---- Hooks ----
   const router = useRouter();                        // used to redirect after login
   const searchParams = useSearchParams();            // reads URL query params
   const message = searchParams.get('message');       // e.g. ?message=Registered successfully
+  const [showPassword, setShowPassword] = useState(false);
 
   // ---- Handle Form Submission ----
   const handleSubmit = async (e) => {
@@ -52,108 +57,131 @@ export default function LoginForm() {
     }
   };
 
-  // ---- Render ----
+
   return (
-    <div className="w-full max-w-md mx-auto px-4">
+    <div className={`min-h-screen min-w-screen grid lg:grid-cols-2 ${ubuntu.className} bg-white text-slate-900`}>
 
-      {/* ---- Logo & Title ---- */}
-      <div className="text-center mb-10">
-        <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-3xl shadow-xl shadow-blue-500/20 mb-6">
-          <ShieldCheck className="text-white w-8 h-8" />
-        </div>
-        <h2 className="text-3xl font-black text-slate-900 tracking-tight uppercase italic">
-          Data<span className="text-blue-600">Sort</span>
-        </h2>
-        <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.2em] mt-2">
-          Secure Terminal Access
-        </p>
-      </div>
+      {/* --- Left Side: Content & Form --- */}
+      <div className="flex flex-col justify-between p-8 lg:p-16 max-w-xl mx-auto w-full">
 
-      {/* ---- Success / Error Message Area ---- */}
-      <div className="min-h-15">
-
-        {/* Success message passed via URL query param e.g. after registration */}
-        {message && (
-          <div className="mb-6 p-4 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-2xl border border-emerald-100 flex items-center gap-3">
-            <span className="shrink-0 w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-            {message}
+        {/* Logo */}
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-black rounded flex items-center justify-center">
+            <Terminal size={18} className="text-white" />
           </div>
-        )}
+        </div>
 
-        {/* Error message from failed login attempt */}
-        {error && (
-          <div className="mb-6 p-4 bg-rose-50 text-rose-700 text-xs font-bold rounded-2xl border border-rose-100 flex items-center gap-3">
-            <AlertCircle size={16} />
-            {error}
+        <div className="w-full">
+          {/* Roboto Slab Heading */}
+          <h1 className={`${robotoSlab.className} text-4xl lg:text-5xl font-medium tracking-tight mb-3`}>
+            Welcome back!
+          </h1>
+          <p className="text-slate-500 mb-10 text-sm">
+            Access your secure terminal and data processing tools.
+          </p>
+
+          {/* Error/Success Notifications */}
+          <div className="min-h-10">
+            {error && <p className="text-red-500 text-xs font-bold mb-4">!! {error}</p>}
+            {message && <p className="text-emerald-500 text-xs font-bold mb-4">{message}</p>}
           </div>
-        )}
-      </div>
 
-      {/* ---- Login Form ---- */}
-      <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Terminal ID */}
+            <div className="space-y-1 group">
+              {/* Label: Using Ubuntu font, bold, and aligned with input text */}
+              <label className={`${ubuntu.className} block text-[11px] font-bold  tracking-widest text-slate-500 ml-3 transition-colors group-focus-within:text-slate-700 `}>
+                LoginID
+              </label>
 
-        {/* Terminal ID Field */}
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-black uppercase text-slate-400 ml-1 tracking-widest">
-            Terminal ID
-          </label>
-          <input 
-            type="text" 
-            placeholder="DTS_XXXXXXXXXXXX" 
-            required 
-            value={loginId}
-            className="w-full bg-slate-50 border-none p-4 rounded-2xl focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-sm font-bold text-slate-900"
-            onChange={(e) => {
-              setLoginId(e.target.value);
-              if (error) setError(''); // clear error when user starts typing
-            }}
-          />
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="DTS_ADMIN_01"
+                  value={loginId}
+                  onChange={(e) => setLoginId(e.target.value)}
+                  /* Balanced padding and border logic to match the password field */
+                  className="w-full border border-slate-300 px-3 py-3 outline-none focus:border-slate-400 transition-all text-sm placeholder:text-slate-300 text-slate-500 bg-transparent rounded-2xl"
+                />
+              </div>
+            </div>
+
+            {/* Password with Toggle */}
+            <div className="space-y-1 relative group">
+              {/* Label: Aligned with the input padding and colored to match the theme */}
+              <label className={`${ubuntu.className} block text-[11px] font-bold  tracking-widest text-slate-500 ml-3 transition-colors group-focus-within:text-slate-700 rounded-2xl `}>
+                Password
+              </label>
+
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full border border-slate-300 px-3 py-3 outline-none focus:border-slate-400 transition-all text-sm text-slate-500 placeholder:text-slate-300 rounded-2xl"
+                />
+
+                {/* Eye Toggle: Positioned perfectly at the end of the line */}
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2 bottom-2 p-1 text-slate-400 hover:text-black transition-colors"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <button
+              disabled={loading}
+              className="w-full bg-black text-white py-4 rounded-full font-bold text-sm mt-8 hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+            >
+              {loading ? <Loader2 className="animate-spin" size={18} /> : "Sign in to Dashboard"}
+            </button>
+          </form>
+
+          {/* Passero One Link */}
+          <div className="mt-12 pt-6 border-t border-slate-100">
+            <p className="text-slate-400 text-sm flex items-center gap-2">
+              {/* Standard Ubuntu text */}
+              Don&apos;t have an account?
+
+              {/* Stylized Passero link */}
+              <Link
+                href="/register"
+                className={`${passero.className} text-blue-600 text-xl hover:text-blue-700 hover:underline underline-offset-4 transition-colors tracking-wide`}
+              >
+                Create here
+              </Link>
+            </p>
+          </div>
         </div>
 
-        {/* Password Field */}
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-black uppercase text-slate-400 ml-1 tracking-widest">
-            Access Key
-          </label>
-          <input 
-            type="password" 
-            placeholder="••••••••" 
-            required 
-            value={password}
-            className="w-full bg-slate-50 border-none p-4 rounded-2xl focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-sm font-bold text-slate-900"
-            onChange={(e) => {
-              setPassword(e.target.value);
-              if (error) setError(''); // clear error when user starts typing
-            }}
-          />
+        {/* Footer info */}
+        <div className="flex gap-6 text-[10px] text-slate-400 uppercase tracking-widest font-bold">
+          <button>Help</button>
+          <button>Terms</button>
+          <button>Privacy</button>
         </div>
-
-        {/* Submit Button — shows spinner when loading */}
-        <button 
-          disabled={loading}
-          className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-blue-600 shadow-xl shadow-slate-900/10 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="animate-spin w-4 h-4" />
-              Authenticating...
-            </>
-          ) : (
-            "Establish Connection"
-          )}
-        </button>
-      </form>
-
-      {/* ---- Register Link ---- */}
-      <div className="mt-12 text-center">
-        <Link 
-          href="/register" 
-          className="text-slate-400 font-bold text-[10px] uppercase tracking-widest hover:text-blue-600 transition-all"
-        >
-          Don&apos;t have credentials? <span className="text-blue-600 underline underline-offset-4">Register here</span>
-        </Link>
       </div>
 
+      {/* --- Right Side: The Graphic (Hidden on mobile) --- */}
+      <div className="hidden lg:block bg-[#f3f3f3] relative overflow-hidden">
+        {/* You can replace this div with an actual <img> or a patterned canvas */}
+        <div
+          className="absolute inset-0 opacity-80"
+          style={{
+            backgroundImage: 'url("https://www.transparenttextures.com/patterns/stardust.png")',
+            backgroundColor: '#111'
+          }}
+        >
+          <div className="flex items-center justify-center h-full">
+            <div className="text-white/20 font-black text-9xl select-none">DTS</div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

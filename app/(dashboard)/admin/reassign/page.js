@@ -1,15 +1,15 @@
 "use client";
-import dynamic from 'next/dynamic';
 import { useState, useEffect, useMemo } from "react";
-// Humne tumhare bataye hue functions import kiye hain
 import { getAllUsers, getReassignableResumes, executeBulkReassign } from "@/app/actions/admin";
+import { passero, robotoSlab } from "@/lib/fonts";
+import { toast } from "sonner";
 import { 
   Users, FileText, Lock, CheckCircle, 
   Loader2, Zap, Search, Square, CheckSquare,
-  ShieldAlert, MousePointer2, ArrowRight
+  ShieldAlert, MousePointer2, ArrowRight, ShieldCheck
 } from "lucide-react";
 
-function AdminReassignContent() {
+export default function AdminReassignPage() {
   const [users, setUsers] = useState([]);
   const [resumes, setResumes] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -20,76 +20,66 @@ function AdminReassignContent() {
   const [actionLoading, setActionLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // 1. Load All Users on Mount
+  // 1. Load Workforce on Mount
   useEffect(() => {
-    let cancelled = false;
     async function init() {
       try {
         const res = await getAllUsers();
-        if (!cancelled && res.success) {
-          setUsers(res.data);
-        }
+        if (res.success) setUsers(res.data);
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
     }
     init();
-    return () => { cancelled = true; };
   }, []);
 
-  // 2. Load Resumes when a User is selected
+  // 2. Load Resumes when User is selected
   const handleUserSelect = async (user) => {
     setSelectedUser(user);
-    setSelectedResumes([]); // Clear previous selection
+    setSelectedResumes([]); 
     setResumesLoading(true);
     try {
       const res = await getReassignableResumes(user._id);
-      if (res.success) setResumes(res.data);
+      if (res.success) {
+        setResumes(res.data);
+      } else {
+        toast.error("Failed to sync resume pool.");
+      }
     } finally {
       setResumesLoading(false);
     }
   };
 
-  // 3. Selection Toggle Logic
+  // 3. Selection Toggle
   const toggleResume = (resume) => {
-    if (resume.isLocked) return; // Cant select locked ones
+    if (resume.isLocked) return;
     setSelectedResumes(prev => {
-      const isAlreadySelected = prev.find(r => r._id === resume._id);
-      if (isAlreadySelected) {
-        return prev.filter(r => r._id !== resume._id);
-      } else {
-        return [...prev, resume];
-      }
+      const exists = prev.find(r => r._id === resume._id);
+      return exists ? prev.filter(r => r._id !== resume._id) : [...prev, resume];
     });
   };
 
-  // 4. Execute Re-assign
+  // 4. Execution Logic
   const handleFinalReassign = async () => {
     if (!selectedUser || selectedResumes.length === 0) return;
     
-    const confirm = window.confirm(
-      `Confirm: Re-assigning ${selectedResumes.length} approved resumes to ${selectedUser.name}. 
-      The user will get pre-filled data in their workspace.`
-    );
-    
-    if (!confirm) return;
-
     setActionLoading(true);
     try {
       const res = await executeBulkReassign(selectedUser._id, selectedResumes);
       if (res.success) {
-        alert("Success! Resumes allocated to " + selectedUser.name);
+        toast.success(`Allocated ${selectedResumes.length} nodes to ${selectedUser.name}`);
         setSelectedResumes([]);
-        handleUserSelect(selectedUser); // Refresh the list to lock the newly assigned ones
+        handleUserSelect(selectedUser); // Refresh to lock assigned items
+      } else {
+        toast.error(res.error || "Execution failed.");
       }
     } catch (err) {
-      alert("Error executing re-assign");
+      toast.error("Critical System Error during reassign.");
     } finally {
       setActionLoading(false);
     }
   };
 
-  // Search filter
   const filteredResumes = useMemo(() => {
     return resumes.filter(r => 
       r.resumeId?.originalName?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -97,159 +87,149 @@ function AdminReassignContent() {
   }, [resumes, searchTerm]);
 
   if (loading) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-white gap-4">
-      <Loader2 className="animate-spin text-blue-600" size={40} />
-      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Fetching User Directory...</p>
+    <div className="h-screen flex flex-col items-center justify-center bg-gray-200 gap-4">
+      <Loader2 className="animate-spin text-black" size={40} />
+      <span className={`${passero.className} text-xl tracking-widest`}>Syncing Workforce...</span>
     </div>
   );
 
   return (
-    <div className="p-8 max-w-400 mx-auto min-h-screen bg-slate-50/20 font-sans">
+    <div className={`p-6 lg:p-10 min-h-screen bg-gray-200 ${robotoSlab.className} text-black selection:bg-black selection:text-white`}>
       
-      {/* HEADER SECTION */}
+      {/* --- HEADER --- */}
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12">
-        <div>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-blue-600 rounded-xl text-white shadow-lg">
-              <Zap size={20} />
-            </div>
-            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-blue-600">Operations Suite</span>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-2 h-2 rounded-full bg-black animate-pulse"></span>
+            <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">Operations Node</p>
           </div>
-          <h1 className="text-5xl font-black uppercase tracking-tighter italic text-slate-900 leading-none">
-            Smart <span className="text-blue-600">Re-assign</span>
+          <h1 className={`${passero.className} text-6xl uppercase italic tracking-tighter leading-none`}>
+            Smart <span className="opacity-20 italic">Re-assign</span>
           </h1>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] mt-4 flex items-center gap-2">
-            <span className="w-12 h-px bg-slate-200"></span> Distribute approved data to active agents
-          </p>
         </div>
 
         {selectedResumes.length > 0 && (
           <button 
             onClick={handleFinalReassign}
             disabled={actionLoading}
-            className="flex items-center gap-3 bg-slate-900 text-white px-10 py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-2xl shadow-slate-200 animate-in zoom-in"
+            className="flex items-center gap-4 bg-black text-white px-10 py-5 rounded-2xl text-[11px] font-bold uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-black/20"
           >
             {actionLoading ? <Loader2 className="animate-spin" size={18} /> : <Zap size={18} />}
-            Execute Assignment ({selectedResumes.length})
+            Execute Forge ({selectedResumes.length})
           </button>
         )}
       </header>
 
-      <div className="grid grid-cols-12 gap-10">
+      <div className="grid grid-cols-12 gap-8">
         
-        {/* --- STEP 1: USER SELECTION (Left Panel) --- */}
+        {/* --- STEP 1: USER POOL (Left) --- */}
         <div className="col-span-12 lg:col-span-4 space-y-6">
-          <div className="flex items-center gap-3 px-4">
-            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 text-[10px] font-black">01</div>
-            <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-900 italic">Target Workforce</h3>
-          </div>
+          <h3 className={`${passero.className} text-lg uppercase opacity-40 tracking-widest px-2`}>01 / Identity Pool</h3>
 
-          <div className="space-y-3 overflow-y-auto max-h-[65vh] pr-2 custom-scrollbar">
+          <div className="space-y-3 overflow-y-auto max-h-[70vh] pr-2 no-scrollbar">
             {users.map((u) => (
               <button 
                 key={u._id}
                 onClick={() => handleUserSelect(u)}
-                className={`w-full p-6 rounded-[2.5rem] border-2 text-left transition-all duration-300 ${
+                className={`w-full p-6 rounded-3xl border transition-all duration-500 text-left flex items-center justify-between group ${
                   selectedUser?._id === u._id 
-                  ? 'border-blue-600 bg-white shadow-xl shadow-blue-50 scale-[1.02]' 
-                  : 'border-white bg-white hover:border-slate-100 shadow-sm'
+                  ? 'bg-black text-white border-black shadow-2xl translate-x-2' 
+                  : 'bg-white border-white hover:border-black/10 text-black shadow-sm'
                 }`}
               >
                 <div className="flex items-center gap-4">
-                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm ${
-                     selectedUser?._id === u._id ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-400'
+                   <div className={`${passero.className} w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
+                     selectedUser?._id === u._id ? 'bg-white text-black' : 'bg-gray-100 text-black'
                    }`}>
-                      {u.name.charAt(0).toUpperCase()}
+                      {u.name?.charAt(0)}
                    </div>
                    <div>
-                      <p className="font-black text-slate-900 uppercase text-xs tracking-tight">{u.name}</p>
-                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter mt-0.5">{u.email}</p>
+                      <p className="font-black uppercase text-xs tracking-tight">{u.name}</p>
+                      <p className={`text-[9px] font-bold uppercase tracking-tighter mt-0.5 ${selectedUser?._id === u._id ? 'opacity-40' : 'text-black/30'}`}>{u.email}</p>
                    </div>
                 </div>
+                <ArrowRight size={14} className={`transition-all ${selectedUser?._id === u._id ? 'opacity-100' : 'opacity-0'}`} />
               </button>
             ))}
           </div>
         </div>
 
-        {/* --- STEP 2: RESUME SELECTION (Right Panel) --- */}
+        {/* --- STEP 2: DATA ALLOCATION (Right) --- */}
         <div className="col-span-12 lg:col-span-8 space-y-6">
-          <div className="flex items-center justify-between px-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 text-[10px] font-black">02</div>
-              <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-900 italic">Select Data for Forge</h3>
-            </div>
+          <div className="flex items-center justify-between px-2">
+            <h3 className={`${passero.className} text-lg uppercase opacity-40 tracking-widest`}>02 / Data Forge</h3>
             {selectedUser && (
-               <span className="text-[9px] font-black uppercase text-blue-600 bg-blue-50 px-3 py-1 rounded-lg animate-pulse">
+               <span className="text-[10px] font-black uppercase text-black bg-white px-4 py-1.5 rounded-full shadow-sm">
                  Destined for: {selectedUser.name}
                </span>
             )}
           </div>
 
           {!selectedUser ? (
-            <div className="h-[60vh] flex flex-col items-center justify-center bg-white border-2 border-dashed border-slate-100 rounded-[4rem]">
-              <MousePointer2 size={48} className="text-slate-100 mb-6 animate-bounce" />
-              <h3 className="text-slate-400 font-black uppercase text-xs tracking-widest">Awaiting User Selection</h3>
-              <p className="text-[9px] font-bold text-slate-300 uppercase mt-2 italic">Select a user from the left panel to load data</p>
+            <div className="h-[60vh] flex flex-col items-center justify-center bg-white rounded-[3rem] border border-white shadow-sm italic text-black/10">
+              <MousePointer2 size={40} className="mb-4 opacity-5 animate-bounce" />
+              <p className="text-[10px] font-bold uppercase tracking-widest">Select Node Identity to sync Forge</p>
             </div>
           ) : resumesLoading ? (
-            <div className="h-[60vh] flex flex-col items-center justify-center bg-white rounded-[4rem] border border-slate-100">
-               <Loader2 className="animate-spin text-blue-600 mb-4" size={32} />
-               <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">Filtering Available Records...</p>
+            <div className="h-[60vh] flex flex-col items-center justify-center bg-white rounded-[3rem] shadow-sm">
+               <Loader2 className="animate-spin text-black mb-4" size={32} />
+               <p className="text-[10px] font-bold uppercase tracking-widest opacity-20">Refreshing Instance Pool...</p>
             </div>
           ) : (
-            <div className="space-y-6">
-              {/* Internal Search */}
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+              {/* Search Bar */}
               <div className="relative group">
-                <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" size={20} />
+                <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-black/20 group-focus-within:text-black transition-colors" size={18} />
                 <input 
                   type="text" 
-                  placeholder="Filter Approved Resumes by Name..." 
-                  className="w-full bg-white border-none rounded-[2rem] py-5 pl-16 pr-8 text-sm font-bold shadow-sm focus:ring-4 focus:ring-blue-50 transition-all outline-none"
+                  placeholder="Filter Instance by Name..." 
+                  className="w-full bg-white rounded-2xl py-5 pl-16 pr-8 text-xs font-bold shadow-sm focus:ring-4 focus:ring-black/5 transition-all outline-none"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
 
-              {/* Resumes Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto max-h-[55vh] pr-2 custom-scrollbar">
+              {/* Data Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto max-h-[60vh] pr-2 no-scrollbar pb-10">
                 {filteredResumes.map((r) => {
-                  const isSelected = selectedResumes.find(sr => sr._id === r._id);
+                  const isSelected = !!selectedResumes.find(sr => sr._id === r._id);
                   return (
                     <div 
                       key={r._id}
-                      onClick={() => toggleResume(r)}
-                      className={`relative p-8 rounded-[3rem] border-2 transition-all duration-300 ${
+                      onClick={() => !r.isLocked && toggleResume(r)}
+                      className={`relative p-8 rounded-[2.5rem] border transition-all duration-500 group ${
                         r.isLocked 
-                        ? 'bg-slate-50 border-slate-50 opacity-60 cursor-not-allowed' 
+                        ? 'bg-gray-100 border-gray-100 opacity-40 cursor-not-allowed scale-95' 
                         : isSelected 
-                          ? 'border-blue-600 bg-white shadow-2xl shadow-blue-100/50' 
-                          : 'border-white bg-white hover:border-slate-100 shadow-sm'
-                      } ${!r.isLocked && 'cursor-pointer hover:scale-[1.02]'}`}
+                          ? 'bg-black text-white border-black shadow-2xl scale-[1.02]' 
+                          : 'bg-white border-white hover:border-black/10 shadow-sm cursor-pointer'
+                      }`}
                     >
-                      <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center justify-between mb-4">
                         {r.isLocked ? (
-                          <div className="p-2 bg-red-50 text-red-500 rounded-lg"><Lock size={16} /></div>
+                          <Lock size={16} className="text-black/20" />
                         ) : (
-                          <div className={`p-2 rounded-lg transition-colors ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-200'}`}>
-                             {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+                          <div className={`transition-colors ${isSelected ? 'text-white' : 'text-black/10'}`}>
+                             {isSelected ? <CheckSquare size={18} /> : <Square size={18} />}
                           </div>
                         )}
-                        <span className="text-[8px] font-black uppercase text-slate-300 tracking-[0.2em] italic">Data Match v1.2</span>
+                        <span className="text-[8px] font-black uppercase opacity-20 tracking-widest italic">Node Logic</span>
                       </div>
                       
-                      <h4 className="font-black text-slate-900 uppercase text-xs leading-tight mb-2 truncate">
-                        {r.resumeId?.originalName || "Unnamed_System_File"}
+                      <h4 className={`font-black uppercase text-[11px] leading-tight mb-2 truncate ${isSelected ? 'text-white' : 'text-black'}`}>
+                        {r.resumeId?.originalName || "UNNAMED_INSTANCE"}
                       </h4>
                       
-                      {r.isLocked ? (
-                        <p className="text-[8px] font-black text-red-400 uppercase flex items-center gap-1 italic">
-                          <ShieldAlert size={10} /> Already Assigned to this User
-                        </p>
-                      ) : (
-                        <p className="text-[8px] font-black text-emerald-500 uppercase flex items-center gap-1 italic">
-                          <CheckCircle size={10} /> Available for Allocation
-                        </p>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        {r.isLocked ? (
+                          <ShieldCheck size={10} className="text-black/20" />
+                        ) : (
+                          <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white animate-pulse' : 'bg-black/20'}`} />
+                        )}
+                        <span className={`text-[8px] font-bold uppercase tracking-widest ${isSelected ? 'text-white/60' : 'opacity-30'}`}>
+                          {r.isLocked ? "User History Conflict" : isSelected ? "Staged for Forge" : "Available"}
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
@@ -261,5 +241,3 @@ function AdminReassignContent() {
     </div>
   );
 }
-
-export default dynamic(() => Promise.resolve(AdminReassignContent), { ssr: false });

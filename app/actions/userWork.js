@@ -61,6 +61,55 @@ export async function incrementResumeHits(resumeId) {
     }
 }
 
+
+// @/app/actions/userWork.js
+
+export async function autoAssignAndGetId(userId) {
+    try {
+        await connectDB();
+
+        // 1. RECOVERY CHECK: Does the user have a resume they already started but didn't submit?
+        const existingTask = await ResumeInstance.findOne({
+            userId,
+            status: "in-progress"
+        });
+
+        if (existingTask) {
+            // Send them back to their current "skipped" task
+            return { success: true, resumeId: existingTask.resumeId.toString() };
+        }
+
+        // 2. ASSIGN NEW: If no pending tasks, find a resume they've NEVER touched
+        const workedResumes = await ResumeInstance.find({ userId }).distinct('resumeId');
+
+        const nextResume = await Resume.findOne({
+            isAvailable: true,
+            _id: { $nin: workedResumes }
+        });
+
+        if (!nextResume) {
+            return { success: false, error: "All resumes completed!" };
+        }
+
+        // 3. CREATE NEW INSTANCE
+        await ResumeInstance.create({
+            userId,
+            resumeId: nextResume._id,
+            status: "in-progress",
+            formData: {}
+        });
+
+        // 4. INCREMENT HITS
+        await Resume.findByIdAndUpdate(nextResume._id, { $inc: { totalHits: 1 } });
+
+        return { success: true, resumeId: nextResume._id.toString() };
+
+    } catch (error) {
+        console.error("Auto-assign error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
 // Resume progress ko save karne ka server action (Auto-save ke liye)
 export async function saveResumeProgress(resumeId, userId, data) {
     try {
@@ -103,7 +152,44 @@ export async function saveResumeProgress(resumeId, userId, data) {
     }
 }
 
+//save option
+export async function holdAndSaveResume(resumeId, userId, data) {
+    try {
+        await connectDB();
 
+        // 1. Check current status for stats
+        const existingDoc = await ResumeInstance.findOne({ resumeId, userId });
+
+        // 2. Update to 'saved' status
+        // This is the key: changing status to 'saved' unlocks the "New Assignment" button
+        await ResumeInstance.findOneAndUpdate(
+            { resumeId, userId },
+            {
+                $set: {
+                    formData: data,
+                    status: 'saved', // Changed from 'in-progress'
+                    updatedAt: new Date()
+                }
+            },
+            { upsert: true }
+        );
+
+        // 3. Stats Logic: If it was in-progress, move it to a 'saved' bucket if you have one,
+        // or just ensure inProgressCount is managed.
+        if (existingDoc && existingDoc.status === 'in-progress') {
+            await User.findByIdAndUpdate(userId, {
+                $inc: { "stats.inProgressCount": -1 }
+            });
+        }
+
+        revalidatePath("/user");
+        return { success: true, message: "Resume moved to saved list." };
+
+    } catch (error) {
+        console.error("Hold/Save error:", error);
+        return { success: false };
+    }
+}
 //reusme
 export async function submitResume(resumeId, userId, data) {
     try {
@@ -219,6 +305,12 @@ export async function getInProgressResumes(userId) {
 //// Ek specific resume ke liye details fetch karne ka function
 export async function getWorkspaceData(resumeId, userId) {
     try {
+        // 1. SAFETY GUARD: Check for "undefined" string or null
+        if (!resumeId || resumeId === "undefined") {
+            console.error("getWorkspaceData called with invalid resumeId:", resumeId);
+            return { success: false, error: "Invalid Resume ID" };
+        }
+
         await connectDB();
 
         const [resume, instance] = await Promise.all([
@@ -232,10 +324,12 @@ export async function getWorkspaceData(resumeId, userId) {
             success: true,
             data: {
                 ...JSON.parse(JSON.stringify(resume)),
-                formData: instance?.formData || null  // Saved progress agar hai toh
+                // Cloudinary URL will now be inside 'resume.fileUrl' automatically
+                formData: instance?.formData || null
             }
         };
     } catch (error) {
+        console.error("Database Error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -247,12 +341,12 @@ export async function getReassignedResumes(userId) {
 
         const results = await ResumeInstance.find({
             userId,
-            status: "re-assigned"
+            // Use $in to check for multiple possible statuses
+            status: { $in: ["re-assigned", "saved" , "review"] }
         })
             .populate("resumeId", "originalName fileUrl")
             .sort({ updatedAt: -1 })
             .lean();
-
         return {
             success: true,
             data: JSON.parse(JSON.stringify(results))

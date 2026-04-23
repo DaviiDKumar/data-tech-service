@@ -1,24 +1,34 @@
+
 "use client";
 import { useEffect, useTransition } from "react";
 import { useUserStore } from "@/store/useUserStore";
 import { getKycRecord } from "@/app/actions/kyc";
-import { 
-  Zap, ShieldCheck, Landmark, TrendingUp, 
-  Clock, CheckCircle2, AlertCircle, ArrowUpRight,
-  Wallet, Activity, CheckCircle, Mail, User as UserIcon
+import { passero, robotoSlab } from "@/lib/fonts";
+import Link from "next/link";
+import {
+  Play, UserCircle, BarChart3, HelpCircle,
+  CheckCircle2, Clock, Activity, AlertCircle, ShieldCheck,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { autoAssignAndGetId } from "@/app/actions/userWork";
+import { useState } from "react";
 
 export default function UserDashboard() {
   const { user, updateUser } = useUserStore();
   const [isPending, startTransition] = useTransition();
 
-  // 🔄 BACKGROUND SYNC (Silent)
+  const TARGET_RESUMES = 300;
+  const approved = user?.stats?.approvedCount || 0;
+  const inProgress = user?.stats?.inProgressCount || 0;
+  const percentage = Math.min(Math.round((approved / TARGET_RESUMES) * 100), 100);
+  const userId = user?.id || user?._id;
+  const [isAssigning, setIsAssigning] = useState(false);
+
   useEffect(() => {
     async function syncData() {
       if (user?.id) {
         const res = await getKycRecord(user.id);
         if (res.success && res.data) {
-          // Syncing state with server data
           updateUser({
             kycStatus: res.data.kycStatus,
             bankDetailsStatus: res.data.bankDetailsStatus,
@@ -27,124 +37,153 @@ export default function UserDashboard() {
         }
       }
     }
-    startTransition(() => {
-      syncData();
-    });
+    startTransition(() => syncData());
   }, [user?.id]);
 
-  // 🔍 DEBUG LOG
-  useEffect(() => {
-    if (user) console.log("✅ Current User State:", user);
-  }, [user]);
 
-  const getStatusStyle = (status) => {
-    const s = status?.toLowerCase();
-    if (s === 'verified') return { border: 'border-emerald-500/20', bg: 'bg-emerald-50', text: 'text-emerald-600', icon: <CheckCircle2 size={14}/> };
-    if (s === 'rejected') return { border: 'border-rose-500/20', bg: 'bg-rose-50', text: 'text-rose-600', icon: <AlertCircle size={14}/> };
-    return { border: 'border-orange-500/20', bg: 'bg-orange-50', text: 'text-orange-600', icon: <Clock size={14}/> };
+
+  const router = useRouter();
+  const handleQuickStart = async () => {
+    if (!userId) return alert("Session expired, login again");
+    setIsAssigning(true);
+
+    const res = await autoAssignAndGetId(userId);
+
+    if (res.success) {
+      // res.resumeId is the _id of the Master Resume we just found
+      router.push(`/user/workspace/${res.resumeId}`);
+    } else {
+      alert(res.error); // This will now show if you actually ran out of PDFs
+    }
+    setIsAssigning(false);
   };
 
-  const kycUI = getStatusStyle(user?.kycStatus);
-  const bankUI = getStatusStyle(user?.bankDetailsStatus);
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 pb-24 p-4 lg:p-0 animate-in fade-in duration-1000">
-      
-      {/* --- PREMIUM HEADER --- */}
-      <div className="bg-slate-900 rounded-[3rem] p-8 lg:p-12 flex flex-col lg:flex-row justify-between items-center shadow-2xl relative overflow-hidden border-b-[8px] border-blue-600">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 blur-[120px] -z-0" />
-        
-        <div className="relative z-10 flex flex-col lg:flex-row items-center gap-8 text-center lg:text-left">
-          <div className="w-28 h-28 bg-blue-600 rounded-[2.5rem] flex items-center justify-center text-5xl font-black italic text-white shadow-2xl rotate-3 border-4 border-white/10">
-            {user?.name?.charAt(0).toUpperCase()}
-          </div>
-          <div className="space-y-2">
-            <h1 className="text-4xl lg:text-5xl font-black uppercase italic tracking-tighter text-white leading-none">
-              Hello, <span className="text-blue-500">{user?.name}</span>
-            </h1>
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] flex items-center justify-center lg:justify-start gap-2">
-              <Zap size={14} className="text-blue-500 fill-blue-500" /> DTS Node: {user?.role || 'User'}
+    <div className={`min-h-screen  p-8 lg:p-12 ${robotoSlab.className}`}>
+      <div className="max-w-6xl mx-auto space-y-12">
+
+        {/* --- WELCOME HEADER --- */}
+        <div className="space-y-1">
+          <p className="text-xs text-black/40  ml-2  mb-2 tracking-[0.3em] uppercase">
+            Active / {user?.role || 'User'}
+          </p>
+          <h1 className="text-4xl font-light text-black">
+            Welcome back, <span className="font-bold">{user?.name || "User"}</span>
+          </h1>
+
+
+          <p className="text-sm text-black/60 mt-2 ml-2 max-w-md">
+            Your workspace is synchronized. All systems are operational and ready for task processing.
+          </p>
+        </div>
+
+        {/* --- ACTION BUTTONS ROW --- */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <button
+            onClick={handleQuickStart}
+            disabled={isAssigning}
+            className={`group relative flex cursor-pointer flex-col item-center justify-center p-6 h-44 rounded-[2.5rem] transition-all active:scale-95 ${isAssigning ? "bg-black" : "bg-black hover:bg-white hover:text-black"
+              } text-white shadow-2xl shadow-slate-200`}
+          >
+
+            <div className="flex justify-between ">
+              <p className={`${robotoSlab.className} text-md font-black uppercase tracking-tighter leading-none`}>
+                {isAssigning ? "Assigning..." : "Start Work"}
+              </p>
+                <ShieldCheck size={20} />
+            </div>
+
+
+          </button>
+
+          <QuickAction
+            href="/user/profile"
+            label="Setup Profile"
+            icon={<UserCircle size={20} />}
+          />
+          <QuickAction
+            href="/user/reportuser"
+            label="Check Report"
+            icon={<BarChart3 size={20} />}
+          />
+          <QuickAction
+            href="/user/queries"
+            label="Queries"
+            icon={<HelpCircle size={20} />}
+          />
+        </div>
+
+        {/* --- PROGRESS & STATS SECTION --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
+
+          {/* Target Circular Progress - Black Card */}
+          <div className="bg-black text-white rounded-[3rem] p-10 flex flex-col items-center text-center transition-all duration-500 hover:bg-white hover:text-black group shadow-xl">
+            <h3 className="text-[10px] uppercase tracking-[0.2em] mb-8 opacity-50 group-hover:text-black/40">Goal Progress</h3>
+            <div className="relative flex items-center justify-center">
+              <svg className="w-48 h-48 transform -rotate-90">
+                <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent" className="opacity-10" />
+                <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent"
+                  strokeDasharray={553}
+                  strokeDashoffset={553 - (553 * percentage) / 100}
+                  className="transition-all duration-1000 ease-out"
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className={`${passero.className} text-5xl`}>{percentage}%</span>
+                <span className="text-[10px] uppercase opacity-50 mt-1">Target Reach</span>
+              </div>
+            </div>
+            <p className="mt-8 text-sm opacity-70 group-hover:opacity-100">
+              {approved} / {TARGET_RESUMES} approved.<br />
+              Target: 300 Resumes
             </p>
           </div>
-        </div>
 
-        <div className="mt-10 lg:mt-0 flex flex-wrap justify-center gap-4 relative z-10">
-          <div className={`px-6 py-4 rounded-3xl border-2 ${kycUI.border} ${kycUI.bg} flex items-center gap-3 shadow-xl backdrop-blur-md`}>
-             <span className={kycUI.text}>{kycUI.icon}</span>
-             <span className={`text-[11px] font-black uppercase tracking-widest ${kycUI.text}`}>KYC {user?.kycStatus || 'Pending'}</span>
+          {/* Breakdown Stats - White Cards */}
+          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <StatCard label="Approved" value={approved} icon={<CheckCircle2 />} />
+            <StatCard label="In Progress" value={inProgress} icon={<Activity />} />
+            <StatCard label="Rejected" value={user?.stats?.rejectedCount || 0} icon={<AlertCircle />} />
           </div>
-          <div className={`px-6 py-4 rounded-3xl border-2 ${bankUI.border} ${bankUI.bg} flex items-center gap-3 shadow-xl backdrop-blur-md`}>
-             <span className={bankUI.text}>{bankUI.icon}</span>
-             <span className={`text-[11px] font-black uppercase tracking-widest ${bankUI.text}`}>Bank {user?.bankDetailsStatus || 'Pending'}</span>
-          </div>
+
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* --- STATS GRID --- */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[
-          { label: 'Live Tasks', val: user?.stats?.inProgressCount || 0, icon: <Activity size={22}/>, color: 'blue' },
-          { label: 'Earnings Approved', val: user?.stats?.approvedCount || 0, icon: <CheckCircle size={22}/>, color: 'emerald' },
-          { label: 'Pending Review', val: user?.stats?.pendingCount || 0, icon: <Clock size={22}/>, color: 'orange' },
-          { label: 'Rejected', val: user?.stats?.rejectedCount || 0, icon: <AlertCircle size={22}/>, color: 'rose' },
-        ].map((stat, i) => (
-          <div key={i} className="bg-white border-2 border-slate-50 p-10 rounded-[3.5rem] shadow-sm hover:shadow-2xl transition-all group relative overflow-hidden">
-             <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-slate-50 rounded-full group-hover:scale-150 transition-all duration-700" />
-             <div className="p-4 rounded-2xl inline-block mb-6 bg-slate-900 text-white shadow-2xl relative z-10 group-hover:bg-blue-600 transition-colors">
-                {stat.icon}
-             </div>
-             <p className="text-[12px] font-black text-slate-400 uppercase tracking-widest relative z-10">{stat.label}</p>
-             <h3 className="text-5xl font-black text-slate-900 italic mt-2 relative z-10 tracking-tighter italic">
-                {isPending ? "..." : stat.val}
-             </h3>
-          </div>
-        ))}
+/* --- SUB-COMPONENTS --- */
+
+function QuickAction({ href, label, icon, isBlack = false }) {
+  // Styles for the black button (Start Work)
+  const blackStyle = "bg-black text-white hover:bg-white hover:text-black shadow-lg";
+  // Styles for the white buttons
+  const whiteStyle = "bg-white text-black hover:bg-black hover:text-white shadow-sm";
+
+  return (
+    <Link href={href} className={`
+      flex items-center justify-between p-6 rounded-[2rem] transition-all duration-500 group
+      ${isBlack ? blackStyle : whiteStyle}
+    `}>
+      <span className="text-sm font-bold uppercase tracking-widest">{label}</span>
+      <div className={`p-2 rounded-xl transition-colors duration-500 ${isBlack ? 'bg-white/10 group-hover:bg-black/5' : 'bg-black/5 group-hover:bg-white/10'}`}>
+        {icon}
       </div>
+    </Link>
+  );
+}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Profile Card */}
-        <div className="lg:col-span-1 bg-white border-2 border-slate-50 rounded-[4rem] p-12 shadow-sm space-y-8">
-            <div className="flex items-center gap-5 border-b border-slate-50 pb-8">
-               <div className="p-4 bg-blue-50 text-blue-600 rounded-[1.5rem] shadow-inner"><UserIcon size={28}/></div>
-               <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900">Account</h2>
-            </div>
-            <div className="space-y-6">
-               <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Registered Email</p>
-                  <p className="text-sm font-black text-slate-800 break-all italic">{user?.email}</p>
-               </div>
-               <div className="p-6 bg-slate-900 rounded-3xl text-white shadow-xl">
-                  <div className="flex items-center justify-between mb-4">
-                     <p className="text-[10px] font-black uppercase tracking-widest text-blue-400">Security Node</p>
-                     <ShieldCheck size={20} className="text-emerald-500"/>
-                  </div>
-                  <p className="text-[11px] font-bold text-slate-400 leading-relaxed uppercase italic">Verification assets are encrypted and locked for payout processing.</p>
-               </div>
-            </div>
-        </div>
-
-        {/* Velocity Card */}
-        <div className="lg:col-span-2 bg-white border-2 border-slate-50 rounded-[4rem] p-12 shadow-sm flex flex-col justify-between group">
-            <div className="flex justify-between items-start mb-12">
-                <div>
-                    <h2 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900">Task Velocity</h2>
-                    <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mt-2 italic underline decoration-blue-500 decoration-2 underline-offset-4">Real-time Node Throughput</p>
-                </div>
-                <div className="px-5 py-2.5 bg-emerald-50 rounded-2xl text-emerald-600 text-[11px] font-black tracking-widest uppercase">SYNC ACTIVE</div>
-            </div>
-            <div className="flex items-end justify-between h-48 gap-5 px-4 border-b-4 border-slate-50 pb-4">
-                {[55, 35, 85, 60, 100, 75, 90].map((h, i) => (
-                    <div key={i} style={{ height: `${h}%` }} className="flex-1 bg-slate-100 rounded-[1.2rem] hover:bg-blue-600 transition-all cursor-pointer shadow-inner" />
-                ))}
-            </div>
-            <div className="flex justify-between mt-8 px-6">
-                {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map(day => (
-                    <span key={day} className="text-[11px] font-black text-slate-300 uppercase tracking-widest">{day}</span>
-                ))}
-            </div>
-        </div>
+function StatCard({ label, value, icon }) {
+  return (
+    <div className="bg-white text-black p-8 rounded-[2.5rem] shadow-sm transition-all duration-500 hover:bg-black hover:text-white group flex justify-between items-center">
+      <div className="space-y-1">
+        <p className="text-[10px] uppercase tracking-widest opacity-40 group-hover:opacity-60 font-bold">{label}</p>
+        <h4 className={`${passero.className} text-4xl`}>{value}</h4>
       </div>
-
+      <div className="p-4 rounded-2xl bg-black/5 group-hover:bg-white/10 transition-all duration-500">
+        {icon}
+      </div>
     </div>
   );
 }

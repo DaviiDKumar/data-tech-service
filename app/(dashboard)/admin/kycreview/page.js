@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { getAllKycRequests, updateComplianceStatus } from "@/app/actions/admin";
-import { 
+import {
   CheckCircle2, X, ExternalLink, Loader2, Clock,
-  ShieldCheck, Landmark, FileSearch, UserCheck, 
+  ShieldCheck, Landmark, FileSearch, UserCheck,
   AlertCircle, History, Search, Eye, MoreHorizontal
 } from "lucide-react";
 import { Toaster, toast } from "sonner";
@@ -15,7 +15,7 @@ export default function KycReviewPage() {
   const [isPending, startTransition] = useTransition();
   const [viewTab, setViewTab] = useState("pending"); // "pending" | "verified"
   const [searchTerm, setSearchTerm] = useState("");
-  
+
   // Modal State
   const [confirmModal, setConfirmModal] = useState({ show: false, data: null });
 
@@ -32,9 +32,9 @@ export default function KycReviewPage() {
 
   // --- Logic: Filter Data based on Tab & Search ---
   const filteredData = requests.filter(req => {
-    const matchesSearch = req.userId?.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          req.userId?.email?.toLowerCase().includes(searchTerm.toLowerCase());
-    
+    const matchesSearch = req.userId?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      req.userId?.email?.toLowerCase().includes(searchTerm.toLowerCase());
+
     const isPending = req.documents?.status === 'pending' || req.bankDetails?.status === 'pending';
     const isVerified = req.documents?.status === 'verified' && req.bankDetails?.status === 'verified';
 
@@ -78,7 +78,7 @@ export default function KycReviewPage() {
             <h3 className="text-2xl font-black text-slate-900 uppercase italic text-center tracking-tighter">Are you sure?</h3>
             <p className="text-xs font-bold text-slate-500 mt-3 mb-10 text-center uppercase leading-relaxed tracking-tight">
               You are moving this <span className="text-slate-900">{confirmModal.data.type}</span> to <span className="underline decoration-2 underline-offset-4">{confirmModal.data.status}</span>.
-              <br/>This will reflect on the user's dashboard instantly.
+              <br />This will reflect on the users dashboard instantly.
             </p>
             <div className="flex gap-4">
               <button onClick={() => setConfirmModal({ show: false, data: null })} className="flex-1 py-5 rounded-2xl text-[11px] font-black uppercase border-2 border-slate-100 text-slate-400 hover:bg-slate-50 transition-all">Cancel</button>
@@ -91,7 +91,7 @@ export default function KycReviewPage() {
       {/* --- HEADER & CONTROL BAR --- */}
       <div className="bg-slate-900 rounded-[3.5rem] p-12 flex flex-col xl:flex-row justify-between items-center shadow-2xl border-b-[8px] border-blue-600 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-blue-600/10 via-transparent to-transparent opacity-50" />
-        
+
         <div className="relative z-10 space-y-2 text-center xl:text-left">
           <h1 className="text-5xl font-black uppercase italic tracking-tighter text-white leading-none">
             KYC <span className="text-blue-500">Vault</span>
@@ -103,9 +103,9 @@ export default function KycReviewPage() {
           {/* Search */}
           <div className="relative w-full md:w-80">
             <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-            <input 
-              type="text" 
-              placeholder="SEARCH USER..." 
+            <input
+              type="text"
+              placeholder="SEARCH USER..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-white/5 border-2 border-white/10 rounded-2xl pl-14 pr-6 py-4 text-xs font-black uppercase text-white tracking-[0.2em] outline-none focus:border-blue-500 transition-all"
@@ -115,12 +115,12 @@ export default function KycReviewPage() {
           {/* Tabs */}
           <div className="flex bg-black/40 p-1.5 rounded-2xl border border-white/10 backdrop-blur-xl">
             {["pending", "verified"].map((tab) => (
-              <button 
+              <button
                 key={tab}
                 onClick={() => setViewTab(tab)}
                 className={`flex items-center gap-2 px-8 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewTab === tab ? 'bg-blue-600 text-white shadow-2xl' : 'text-slate-500 hover:text-white'}`}
               >
-                {tab === "pending" ? <History size={14}/> : <CheckCircle2 size={14}/>}
+                {tab === "pending" ? <History size={14} /> : <CheckCircle2 size={14} />}
                 {tab}
               </button>
             ))}
@@ -132,13 +132,13 @@ export default function KycReviewPage() {
       <div className="grid grid-cols-1 gap-8">
         {filteredData.length === 0 ? (
           <div className="bg-white border-2 border-dashed border-slate-100 rounded-[4rem] py-40 text-center">
-             <FileSearch size={100} className="mx-auto mb-6 text-slate-100" />
-             <p className="font-black uppercase italic text-sm tracking-[0.3em] text-slate-300">Vault Section Empty</p>
+            <FileSearch size={100} className="mx-auto mb-6 text-slate-100" />
+            <p className="font-black uppercase italic text-sm tracking-[0.3em] text-slate-300">Vault Section Empty</p>
           </div>
         ) : (
           filteredData.map((req) => (
             <div key={req._id} className="bg-white border-2 border-slate-50 rounded-[4rem] p-10 flex flex-col xl:flex-row gap-12 hover:shadow-2xl transition-all group relative overflow-hidden">
-              
+
               {/* Profile Sidebar */}
               <div className="flex flex-row xl:flex-col items-center xl:items-start gap-6 min-w-[260px] xl:border-r border-slate-100 pr-0 xl:pr-12">
                 <div className="w-20 h-20 bg-slate-900 rounded-[2.2rem] flex items-center justify-center text-3xl font-black italic text-white shadow-2xl group-hover:rotate-6 transition-all duration-500">
@@ -162,43 +162,48 @@ export default function KycReviewPage() {
                     {req.documents?.status}
                   </span>
                 </div>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* ID Proof Button */}
                   <div className="bg-white p-5 rounded-3xl border-2 border-slate-100 shadow-sm flex items-center justify-between group/btn">
                     <div>
-                        <p className="text-[8px] font-black text-slate-400 uppercase">{req.documents.idProof?.idType || "ID PROOF"}</p>
-                        <p className="text-[11px] font-bold text-slate-800">{req.documents.idProof?.idNumber}</p>
+                      <p className="text-[8px] font-black text-slate-400 uppercase">{req.documents.idProof?.idType || "ID PROOF"}</p>
+                      <p className="text-[11px] font-bold text-slate-800">{req.documents.idProof?.idNumber}</p>
                     </div>
-                    <a href={req.documents.idProof?.fileUrl} target="_blank" className="p-3 bg-slate-50 rounded-2xl text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-sm">
-                        <Eye size={18}/>
+                    <a
+                      href={req.documents.idProof?.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-3 bg-slate-50 rounded-2xl text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                    >
+                      <Eye size={18} />
                     </a>
                   </div>
                   {/* Address Proof Button */}
                   <div className="bg-white p-5 rounded-3xl border-2 border-slate-100 shadow-sm flex items-center justify-between group/btn">
                     <div>
-                        <p className="text-[8px] font-black text-slate-400 uppercase">Address Proof</p>
-                        <p className="text-[11px] font-bold text-slate-800">{req.documents.addressProof?.idNumber || "Not Provided"}</p>
+                      <p className="text-[8px] font-black text-slate-400 uppercase">Address Proof</p>
+                      <p className="text-[11px] font-bold text-slate-800">{req.documents.addressProof?.idNumber || "Not Provided"}</p>
                     </div>
                     <a href={req.documents.addressProof?.fileUrl} target="_blank" className="p-3 bg-slate-50 rounded-2xl text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-sm">
-                        <Eye size={18}/>
+                      <Eye size={18} />
                     </a>
                   </div>
                 </div>
 
                 <div className="flex gap-3 pt-2">
-                  <button 
+                  <button
                     disabled={req.documents?.status === 'verified' || isPending}
                     onClick={() => setConfirmModal({ show: true, data: { id: req._id, type: 'kyc', status: 'verified' } })}
                     className="flex-1 bg-emerald-500 text-white py-4 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:shadow-xl transition-all disabled:opacity-20 disabled:grayscale"
                   >
                     {req.documents?.status === 'verified' ? "Identity Approved" : "Approve Identity"}
                   </button>
-                  <button 
+                  <button
                     onClick={() => setConfirmModal({ show: true, data: { id: req._id, type: 'kyc', status: 'rejected' } })}
                     className="bg-rose-500 text-white px-6 rounded-[1.5rem] hover:bg-rose-600 transition-all flex items-center justify-center"
                   >
-                    <X size={20}/>
+                    <X size={20} />
                   </button>
                 </div>
               </div>
@@ -214,7 +219,7 @@ export default function KycReviewPage() {
                     {req.bankDetails?.status}
                   </span>
                 </div>
-                
+
                 <div className="bg-white p-6 rounded-3xl border-2 border-slate-50 text-[11px] font-bold text-slate-800 space-y-2 shadow-inner font-mono">
                   <p className="flex justify-between opacity-80 uppercase text-[9px]"><span>Holder:</span> {req.bankDetails.data?.accountHolderName}</p>
                   <p className="flex justify-between"><span>A/C:</span> {req.bankDetails.data?.accountNumber}</p>
@@ -222,18 +227,18 @@ export default function KycReviewPage() {
                 </div>
 
                 <div className="flex gap-3 pt-2">
-                  <button 
+                  <button
                     disabled={req.bankDetails?.status === 'verified' || isPending}
                     onClick={() => setConfirmModal({ show: true, data: { id: req._id, type: 'bank', status: 'verified' } })}
                     className="flex-1 bg-slate-900 text-white py-4 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:shadow-xl transition-all disabled:opacity-20 disabled:grayscale"
                   >
                     {req.bankDetails?.status === 'verified' ? "Payout Verified" : "Verify Bank Info"}
                   </button>
-                  <button 
+                  <button
                     onClick={() => setConfirmModal({ show: true, data: { id: req._id, type: 'bank', status: 'rejected' } })}
                     className="bg-rose-500 text-white px-6 rounded-[1.5rem] hover:bg-rose-600 transition-all flex items-center justify-center"
                   >
-                    <X size={20}/>
+                    <X size={20} />
                   </button>
                 </div>
               </div>

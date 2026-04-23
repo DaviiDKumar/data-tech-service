@@ -5,26 +5,20 @@ const ResumeSchema = new mongoose.Schema({
   resumeNo: { 
     type: Number, 
     required: true, 
-    unique: true 
+    unique: true // 1, 2, 3... tracking ke liye
   },
   uniqueId: { 
     type: String, 
     required: true, 
-    unique: true 
+    unique: true // UUID for system reference
   },
   originalName: { 
     type: String, 
     required: true 
   },
-  
-  // --- The Fix for Vercel ---
-  fileData: { 
-    type: String, 
-    required: true // This will store the Base64 string of the PDF
-  },
   fileUrl: { 
     type: String, 
-    required: false // Optional now, or used for UI routing
+    required: true 
   },
   
   // --- Metadata ---
@@ -33,24 +27,25 @@ const ResumeSchema = new mongoose.Schema({
     default: "application/pdf" 
   },
   fileSize: { 
-    type: String 
+    type: String // Size in KB/MB (Optional but good for audit)
   },
   
   // --- Global Status ---
-  isAvailable: { 
+  
+  isAvailable: { // Ye add kiya taaki user pool mein dikhe ya nahi
     type: Boolean,
     default: true
   },
-
   // --- Tracking ---
   totalHits: { 
     type: Number, 
-    default: 0 
+    default: 0 // Kitne users ne is par click kiya/instance banaya
   },
   uploadedBy: { 
     type: mongoose.Schema.Types.ObjectId, 
-    ref: "User" 
+    ref: "User" // Admin ID jisne upload kiya
   },
+
   
   createdAt: { 
     type: Date, 
@@ -58,5 +53,4 @@ const ResumeSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-// This prevents Mongoose from creating the model multiple times during Next.js hot-reloads
 export default mongoose.models.Resume || mongoose.model("Resume", ResumeSchema);

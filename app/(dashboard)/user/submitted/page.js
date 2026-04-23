@@ -54,7 +54,7 @@ function SubmittedContent() {
   }, []);
 
   return (
-    <div className="p-6 md:p-12 max-w-6xl mx-auto min-h-screen bg-white">
+    <div className="p-6 md:p-12 max-w-6xl mx-auto min-h-screen ">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-16">
         <div>
