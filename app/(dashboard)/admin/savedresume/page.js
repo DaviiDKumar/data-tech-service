@@ -1,124 +1,187 @@
-import { getAdminSavedResumes } from "@/app/actions/admin";
-import { ubuntu, passero } from "@/lib/fonts";
+"use client";
+
+import { useState, useEffect } from "react";
+// Updated imports per your request
+import { getAdminSavedResumes, bulkUpdateResumeStatus } from "@/app/actions/admin";
+import { passero } from "@/lib/fonts";
+import { 
+  Loader2, Search, FileText, CheckCircle, 
+  XCircle, Filter, ExternalLink, RefreshCcw
+} from "lucide-react";
 import Link from "next/link";
-import { FileText, ExternalLink, ShieldCheck, Clock, User as UserIcon, ChevronRight } from "lucide-react";
 
-export default async function AdminSavedResumesPage() {
-    // Fetching data using your specific action
-    const response = await getAdminSavedResumes();
-    const resumes = response.data || [];
-    console.log(resumes);
+export default function GlobalAuditPage() {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState([]);
+  const [search, setSearch] = useState("");
 
+  // Fix: Moved fetchData inside useEffect or wrapped in useCallback to prevent ESLint warnings
+  useEffect(() => {
+    let isMounted = true;
 
-    if (!response.success) {
-        return (
-            <div className="p-20 text-center font-mono text-red-500">
-                SYSTEM_ERROR: {response.error}
-            </div>
-        );
+    async function fetchData() {
+      try {
+        const res = await getAdminSavedResumes();
+        if (isMounted && res.success) {
+          setItems(res.data);
+        }
+      } catch (err) {
+        console.error("Fetch Error:", err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
     }
 
-    return (
-        <div className={`${ubuntu.className} min-h-screen bg-white text-black`}>
-            {/* STICKY HEADER */}
-            <header className="sticky top-0 z-50 bg-white border-b border-black px-8 py-6 flex justify-between items-end">
-                <div>
-                    <h1 className={`${passero.className} text-4xl font-black tracking-tighter uppercase leading-none`}>
-                        DTS <span className="text-gray-300">/</span> ADMIN
-                    </h1>
-                    <p className="text-[10px] font-mono mt-2 tracking-[0.2em] text-gray-400 uppercase">
-                        Growthforge Data Service // Pipeline Management
-                    </p>
-                </div>
-                <div className="text-right font-mono">
-                    <span className="text-[10px] text-gray-400 block uppercase">Active Pool</span>
-                    <span className="text-2xl font-bold">{resumes.length}</span>
-                </div>
-            </header>
+    fetchData();
+    return () => { isMounted = false; };
+  }, []);
 
-            <main className="p-8 max-w-7xl mx-auto">
-                {/* DATA GRID */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {resumes.map((item) => {
-                        const userName = item.userId?.name || "ORPHAN_USER";
-                        const userEmail = item.userId?.email || "NO_CONTACT";
-                        const fileName = item.resumeId?.originalName || "DOCUMENT_NULL.PDF";
-                        const fileLink = item.resumeId?.fileUrl || "#";
+  const toggleSelect = (id) => {
+    setSelected(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
 
-                        return (
-                            <div
-                                key={item._id}
-                                className="border border-black p-6 hover:bg-gray-50 transition-all group flex flex-col justify-between h-full"
-                            >
-                                <div>
-                                    {/* STATUS BADGE */}
-                                    <div className="flex justify-between items-start mb-6">
-                                        <div className={`text-[9px] font-black px-2 py-1 border border-black uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${item.status === 'review' ? 'bg-yellow-400' :
-                                                item.status === 'saved' ? 'bg-green-400' : 'bg-blue-400'
-                                            }`}>
-                                            {item.status}
-                                        </div>
-                                        <span className="text-[9px] font-mono text-gray-400 italic">
-                                            ID: {item._id.toString().slice(-6).toUpperCase()}
-                                        </span>
-                                    </div>
+  const handleBulk = async (status) => {
+    if (!selected.length || !confirm(`Process ${selected.length} items as ${status}?`)) return;
+    
+    setLoading(true);
+    // Updated to use the requested action name
+    const res = await bulkUpdateResumeStatus(selected, status); 
+    if (res.success) {
+      setSelected([]);
+      // Trigger a fresh fetch
+      const refresh = await getAdminSavedResumes();
+      if (refresh.success) setItems(refresh.data);
+    }
+    setLoading(false);
+  };
 
-                                    {/* USER INFO */}
-                                    <div className="mb-6">
-                                        <h2 className="text-lg font-bold leading-tight uppercase truncate">
-                                            {userName}
-                                        </h2>
-                                        <p className="text-xs font-mono text-gray-500 truncate lowercase italic">
-                                            {userEmail}
-                                        </p>
-                                    </div>
+  const filtered = items.filter(item => 
+    item.userId?.name?.toLowerCase().includes(search.toLowerCase()) ||
+    item.resumeId?.originalName?.toLowerCase().includes(search.toLowerCase())
+  );
 
-                                    {/* FILE PREVIEW BOX */}
-                                    <div className="bg-black text-white p-4 mb-6 flex justify-between items-center group-hover:invert transition-all">
-                                        <div className="flex items-center gap-3 overflow-hidden">
-                                            <FileText size={16} className="shrink-0" />
-                                            <span className="text-[10px] font-mono font-bold truncate">
-                                                {fileName}
-                                            </span>
-                                        </div>
-                                        <a href={fileLink} target="_blank" className="hover:scale-110 transition-transform">
-                                            <ExternalLink size={14} />
-                                        </a>
-                                    </div>
-                                </div>
+  if (loading && items.length === 0) return (
+    <div className="h-screen flex flex-col items-center justify-center gap-4 bg-white text-black">
+      <Loader2 className="animate-spin" size={40} />
+      <p className={`${passero.className} text-[10px] uppercase tracking-[5px]`}>Accessing Logs...</p>
+    </div>
+  );
 
-                                {/* FOOTER ACTIONS */}
-                                <div className="pt-4 border-t border-gray-200 flex justify-between items-center">
-                                    <div className="flex items-center gap-1 text-gray-400">
-                                        <Clock size={10} />
-                                        <span className="text-[9px] font-mono uppercase">
-                                            {new Date(item.updatedAt).toLocaleDateString('en-GB')}
-                                        </span>
-                                    </div>
-                                 
-                                    <Link
-                                        href={`/admin/reviewSaved/${item._id}`} // Points to the new separate page
-                                        className="flex items-center gap-1 text-xs font-bold uppercase tracking-widest text-black hover:underline"
-                                    >
-                                        Inspect <ChevronRight size={14} />
-                                    </Link>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-
-                {/* EMPTY STATE */}
-                {resumes.length === 0 && (
-                    <div className="py-40 text-center">
-                        <div className="inline-block border border-dashed border-black px-10 py-6">
-                            <p className="font-mono text-xs text-gray-400 uppercase tracking-widest">
-                                Zero records found in pipeline
-                            </p>
-                        </div>
-                    </div>
-                )}
-            </main>
+  return (
+    <div className="p-8 md:p-12 bg-gray-50 min-h-screen font-sans">
+      
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row justify-between items-end gap-6 mb-12">
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+             <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center text-white">
+                <RefreshCcw size={16} />
+             </div>
+             <span className="text-[10px] font-black uppercase tracking-[4px] text-slate-400">Audit Logs</span>
+          </div>
+          <h1 className={`${passero.className} text-6xl uppercase tracking-tighter text-black leading-none italic`}>
+            Saved <span className="text-zinc-300">Drafts</span>
+          </h1>
         </div>
-    );
+
+        {/* Floating Bulk Action Bar - Fixed z-index per Tailwind suggestion */}
+        {selected.length > 0 && (
+          <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-100 flex items-center gap-6 bg-black text-white px-8 py-5 rounded-[2.5rem] shadow-2xl border border-white/10 animate-in fade-in slide-in-from-bottom-10">
+            <span className="text-[10px] font-black uppercase tracking-widest border-r border-white/20 pr-6">
+              {selected.length} Selected
+            </span>
+            <div className="flex gap-3">
+              <button onClick={() => handleBulk('approved')} className="flex items-center gap-2 bg-emerald-500 px-6 py-2 rounded-xl text-[10px] font-black uppercase transition-all">
+                <CheckCircle size={14} /> Approve
+              </button>
+              <button onClick={() => handleBulk('rejected')} className="flex items-center gap-2 bg-red-500 px-6 py-2 rounded-xl text-[10px] font-black uppercase transition-all">
+                <XCircle size={14} /> Reject
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Control Bar */}
+      <div className="grid grid-cols-12 gap-6 mb-8">
+        <div className="col-span-12 md:col-span-8 relative">
+          <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <input 
+            type="text" 
+            placeholder="SEARCH BY USER OR FILENAME..."
+            className="w-full bg-white border-2 border-slate-200 rounded-2xl py-5 pl-16 pr-8 text-[11px] font-black uppercase tracking-widest outline-none focus:border-black transition-all"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="col-span-12 md:col-span-4 bg-white border-2 border-slate-200 rounded-2xl flex items-center justify-center gap-4 px-6">
+           <Filter size={18} className="text-slate-400" />
+           <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Records: {filtered.length}</span>
+        </div>
+      </div>
+
+      {/* Table Interface */}
+      <div className="bg-white border-2 border-black rounded-[3rem] overflow-hidden shadow-2xl">
+        <table className="w-full text-left">
+          <thead className="bg-black text-white text-[9px] font-black uppercase tracking-[3px]">
+            <tr>
+              <th className="p-8 w-16 text-center">
+                <input 
+                  type="checkbox" 
+                  className="w-5 h-5 accent-zinc-500"
+                  onChange={(e) => setSelected(e.target.checked ? filtered.map(i => i._id) : [])}
+                />
+              </th>
+              <th className="p-8">File Name</th>
+              <th className="p-8">User</th>
+              <th className="p-8">Status</th>
+              <th className="p-8 text-right">View</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 text-black">
+            {filtered.map((item) => (
+              <tr key={item._id} className={`group hover:bg-zinc-50 transition-colors ${selected.includes(item._id) ? 'bg-zinc-50' : ''}`}>
+                <td className="p-8 text-center">
+                  <input 
+                    type="checkbox" 
+                    checked={selected.includes(item._id)} 
+                    onChange={() => toggleSelect(item._id)}
+                    className="w-5 h-5 accent-black rounded-lg"
+                  />
+                </td>
+                <td className="p-8">
+                  <div className="flex items-center gap-4">
+                    <FileText size={18} className="text-slate-400" />
+                    <span className="text-[11px] font-black uppercase tracking-tight truncate max-w-[200px]">{item.resumeId?.originalName || 'Anonymous'}</span>
+                  </div>
+                </td>
+                <td className="p-8">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold uppercase">{item.userId?.name}</span>
+                    <span className="text-[8px] font-medium text-slate-400">{item.userId?.email}</span>
+                  </div>
+                </td>
+                <td className="p-8">
+                  <span className={`px-4 py-1.5 rounded-full text-[8px] font-black uppercase tracking-widest border
+                    ${item.status === 'in-progress' ? 'bg-amber-50 text-amber-600 border-amber-100' : 
+                      'bg-zinc-100 text-black border-black'}`}>
+                    {item.status}
+                  </span>
+                </td>
+                <td className="p-8 text-right">
+                   <Link 
+                    href={`/admin/user/${item.userId?._id}`}
+                    className="p-3 inline-flex items-center justify-center bg-slate-50 border border-slate-200 rounded-2xl hover:bg-black hover:text-white transition-all"
+                   >
+                     <ExternalLink size={14} />
+                   </Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }

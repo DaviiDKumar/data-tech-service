@@ -9,12 +9,13 @@ const nextConfig = {
       },
     ],
   },
-  // Optional: If you face memory issues during build on 1GB RAM
-  experimental: {
-    turbo: {
-      // Turbopack settings if needed
-    },
+  // In Next.js 16, 'turbo' is now 'turbopack'
+  turbopack: {
+    // Your Turbopack settings here
   },
+  // This is also a good time to ensure caching is enabled 
+  // if you're using the new React 19 features
+  cacheComponents: true, 
 };
 
 export default nextConfig;

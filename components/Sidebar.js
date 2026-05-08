@@ -37,17 +37,44 @@ export default function Sidebar({ initialUser }) {
     }
   };
 
-  const handleQuickStart = async () => {
-    if (!userId) return alert("Session expired, login again");
-    setIsAssigning(true);
+ const handleQuickStart = async () => {
+  // 1. Initial Session Guard
+  if (!userId) {
+    return alert("Session expired, please login again.");
+  }
+
+  // 2. Start Loading UI
+  setIsAssigning(true);
+
+  try {
+    /** 
+     * We call the server action. 
+     * This action now contains the Date Expiry check and 
+     * the isActive check we added earlier.
+     */
     const res = await autoAssignAndGetId(userId);
+
     if (res.success) {
+      // If within timeline and active, move to workspace
       router.push(`/user/workspace/${res.resumeId}`);
     } else {
-      alert(res.error);
+      /**
+       * If Date has passed, res.error will be:
+       * "Your assignment period has ended..."
+       * 
+       * If Admin deactivated account, res.error will be:
+       * "Your account access has been revoked..."
+       */
+      alert(res.error || "Unable to start assignment.");
     }
+  } catch (error) {
+    console.error("Assignment Error:", error);
+    alert("A system error occurred. Please try again later.");
+  } finally {
+    // 3. Reset Loading UI
     setIsAssigning(false);
-  };
+  }
+};
 
   const userMenu = [
     { name: 'Dashboard', icon: <LayoutDashboard size={18} />, path: '/user' },
@@ -72,7 +99,7 @@ export default function Sidebar({ initialUser }) {
     { name: 'KYC Center', icon: <Briefcase size={18} />, path: '/admin/kycreview ' },
     { name: 'Role Master', icon: <ShieldCheck size={18} />, path: '/admin/roles' },
     { name: 'Admin Resumes', icon: <FileText size={18} />, path: '/admin/resumes' },
-    { name: 'Support', icon: <LifeBuoy size={18} />, path: '/admin/support' },
+    { name: 'Queries', icon: <LifeBuoy size={18} />, path: '/admin/queries' },
   ];
 
   const currentMenu = role === 'admin' ? adminMenu : userMenu;

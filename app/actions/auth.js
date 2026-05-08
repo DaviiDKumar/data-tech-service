@@ -129,18 +129,37 @@ export async function loginUser(formData) {
     // 1. Find user by loginId
     const user = await User.findOne({ loginId });
 
-    // 2. Agar user nahi mila
+    // 2. Check if user exists
     if (!user) {
       return { success: false, message: "Invalid Login ID or Password" };
     }
 
-    // 3. Simple String Comparison (No Bcrypt)
-    // Checking the plain text password from DB against the user input
+    // 3. Password Check
     const isMatch = password === user.password;
-
     if (!isMatch) {
       return { success: false, message: "Invalid Login ID or Password" };
     }
+
+    // ─── START: SECURITY & EXPIRY GUARD ─────────────────────────────────────
+   // ─── START: ROLE-BASED SECURITY GUARD ───────────────────────────────────
+    
+    // Admins bypass all expiry and activity checks
+    if (user.role === "user") {
+        
+        // 1. Check for manual deactivation
+        if (!user.isActive) {
+            return { 
+                success: false, 
+                message: "Your account is currently inactive. Please contact the administrator." 
+            };
+        }
+
+      
+    }
+
+    // ─── END: ROLE-BASED SECURITY GUARD ─────────────────────────────────────
+
+    // ─── END: SECURITY & EXPIRY GUARD ───────────────────────────────────────
 
     // 4. Cookies setup
     const cookieStore = await cookies();

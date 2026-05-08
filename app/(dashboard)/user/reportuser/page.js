@@ -87,7 +87,7 @@ export default function UserReportPage() {
                   <DataRow label="In-Progress" value={stats.inProgress} sub="Active work sessions" isGray icon={<Clock size={12}/>} />
                 </div>
                 <div className="pt-6 border-t border-gray-100 flex justify-between items-center">
-                   <p className="text-[10px] font-black uppercase tracking-widest ">Total Submissions</p>
+                   <p className="text-[10px] font-black uppercase tracking-widest ">Total </p>
                    <span className={`${passero.className} text-4xl`}>{stats.totalSubmitted}</span>
                 </div>
              </div>

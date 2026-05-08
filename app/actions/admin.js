@@ -16,7 +16,7 @@ export async function getAllUsers() {
     // .select("-password") ensures security
     // .lean() makes the query faster by returning plain JS objects
     const users = await User.find({ role: "user" })
-      .select("-password")
+     
       .sort({ createdAt: -1 })
       .lean();
 
@@ -34,6 +34,56 @@ export async function getAllUsers() {
   }
 }
 
+
+/**
+ * Update User Access: Deactivate, Extend Time, or Set Fixed End Date
+ * @param {string} userId - Target user's MongoDB ID
+ * @param {object} updates - { isActive, daysToAdd, fixedEndDate }
+ */
+export async function manageUserAccess(userId, updates) {
+    try {
+        await connectDB();
+
+        // 1. Fetch the user to get current endDate for relative calculations
+        const user = await User.findById(userId);
+        if (!user) return { success: false, message: "User not found" };
+
+        let updateFields = {};
+
+        // A. Toggle Active Status
+        if (typeof updates.isActive !== 'undefined') {
+            updateFields.isActive = updates.isActive;
+        }
+
+        // B. Relative Extension (Add X days to current end date)
+        if (updates.daysToAdd) {
+            const currentEnd = new Date(user.endDate || new Date());
+            currentEnd.setDate(currentEnd.getDate() + updates.daysToAdd);
+            updateFields.endDate = currentEnd;
+        }
+
+        // C. Absolute Update (Set specific date)
+        if (updates.fixedEndDate) {
+            updateFields.endDate = new Date(updates.fixedEndDate);
+        }
+
+        // 2. Perform the update
+        await User.findByIdAndUpdate(userId, { $set: updateFields });
+
+        // 3. Clear Cache for the Admin and User pages
+        revalidatePath("/admin/users");
+        revalidatePath(`/admin/user/${userId}`);
+
+        return { 
+            success: true, 
+            message: "User access parameters updated successfully." 
+        };
+
+    } catch (error) {
+        console.error("Admin Access Update Error:", error);
+        return { success: false, message: error.message };
+    }
+}
 
 
 

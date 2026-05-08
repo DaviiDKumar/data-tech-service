@@ -1,27 +1,30 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
-export default async function Home() {
-  // 1. Cookies fetch karna (Ye Server-side par ho raha hai)
+// REMOVED: export const dynamic = 'force-dynamic'; 
+
+async function AuthHandler() {
   const cookieStore = await cookies();
-  
-  // HttpOnly cookies ko server aaram se read kar sakta hai
   const role = cookieStore.get('role')?.value;
 
-  // 2. Agar login nahi hai, toh Login page par bhej do
-  if (!role) {
+  if (!role) redirect('/login');
+  
+  if (role === 'admin') {
+    redirect('/admin');
+  } else if (role === 'user') {
+    redirect('/user');
+  } else {
     redirect('/login');
   }
 
-  // 3. Role-Based Redirection logic
-  if (role === 'admin') {
-    // Admin ko uske control center bhejenge
-    redirect('/admin');
-  } else if (role === 'user') {
-    // Normal operator/user ko uske workspace dashboard par
-    redirect('/user');
-  } else {
-    // Agar role unrecognized hai, toh safety ke liye login
-    redirect('/login');
-  }
+  return null;
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={null}>
+      <AuthHandler />
+    </Suspense>
+  );
 }

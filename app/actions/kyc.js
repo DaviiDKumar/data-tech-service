@@ -51,13 +51,7 @@ export async function submitBankDetails(userId, bankPayload) {
 
 
 
-/**
- * Helper: Uploads buffer to Cloudinary with PDF-friendly settings
- */
 
-/**
- * Main Action: Handles both File Uploads and DB Updates
- */
 export async function submitKycWithFiles(userId, formData) {
   try {
     await connectDB();
