@@ -63,7 +63,7 @@ export default function AdminPage() {
     { name: 'Upload Pool', icon: <UploadCloud size={20}/>, path: '/admin/upload', isBlack: true },
     { name: 'User Master', icon: <Users size={20}/>, path: '/admin/users', isBlack: false },
     { name: 'Pool View', icon: <FileText size={20}/>, path: '/admin/resumes', isBlack: false },
-    { name: 'System Logs', icon: <Database size={20}/>, path: '/admin/support', isBlack: false },
+    { name: 'System Logs', icon: <Database size={20}/>, path: '/admin/queries', isBlack: false },
   ];
 
   if (loading) {

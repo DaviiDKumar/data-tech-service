@@ -97,7 +97,6 @@ export default function Sidebar({ initialUser }) {
     { name: 'Saved', icon: <FilePlus size={18} />, path: '/admin/savedresume' },
     { name: 'Submitted', icon: <CheckCircle size={18} />, path: '/admin/submitted' },
     { name: 'KYC Center', icon: <Briefcase size={18} />, path: '/admin/kycreview ' },
-    { name: 'Role Master', icon: <ShieldCheck size={18} />, path: '/admin/roles' },
     { name: 'Admin Resumes', icon: <FileText size={18} />, path: '/admin/resumes' },
     { name: 'Queries', icon: <LifeBuoy size={18} />, path: '/admin/queries' },
   ];
