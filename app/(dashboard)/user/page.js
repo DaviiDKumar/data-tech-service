@@ -74,7 +74,7 @@ export default function UserDashboard() {
 
 
           <p className="text-sm text-black/60 mt-2 ml-2 max-w-md">
-            Your workspace is synchronized. All systems are operational and ready for task processing.
+            Your workspace is Ready.
           </p>
         </div>
 
