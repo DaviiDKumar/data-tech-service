@@ -34,7 +34,7 @@ jobs:
           port: 65002
           rm: true 
           # FIXED: Added app/, lib/, and src/ to the source list
-          source: ".next/,public/,package.json,next.config.mjs,server.js,app/,lib/,src/"
+          source: ".next/,public/,package.json,next.config.mjs,server.js,app/,lib/,models/,store/,components/,components.json,postcss.config.mjs,jsconfig.json"
           target: "domains/datatechservice.in/nodejs/"
 
       - name: Restart Node.js App
