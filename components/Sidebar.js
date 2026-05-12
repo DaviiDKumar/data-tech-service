@@ -4,13 +4,13 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useUserStore } from '@/store/useUserStore';
 import { logoutUser } from '@/app/actions/auth';
-import { passero, robotoSlab, ubuntu } from '@/lib/fonts';
+import { robotoSlab, ubuntu, passero } from '@/lib/fonts';
 import { useState } from 'react';
 import {
   LayoutDashboard, Briefcase, FilePlus, Bookmark,
   CheckCircle, XCircle, MessageSquare, User,
   PlusCircle, Loader2, UploadCloud, Users, RefreshCw,
-  ShieldCheck, FileText, LifeBuoy, LogOut,
+  FileText, LifeBuoy, LogOut
 } from 'lucide-react';
 import { autoAssignAndGetId } from '@/app/actions/userWork';
 
@@ -31,141 +31,117 @@ export default function Sidebar({ initialUser }) {
       logoutStore();
       await logoutUser();
     } catch (error) {
-      if (error.message !== 'NEXT_REDIRECT') {
-        console.error("Logout failed:", error);
-      }
+      if (error.message !== 'NEXT_REDIRECT') console.error("Logout failed:", error);
     }
   };
 
- const handleQuickStart = async () => {
-  // 1. Initial Session Guard
-  if (!userId) {
-    return alert("Session expired, please login again.");
-  }
-
-  // 2. Start Loading UI
-  setIsAssigning(true);
-
-  try {
-    /** 
-     * We call the server action. 
-     * This action now contains the Date Expiry check and 
-     * the isActive check we added earlier.
-     */
-    const res = await autoAssignAndGetId(userId);
-
-    if (res.success) {
-      // If within timeline and active, move to workspace
-      router.push(`/user/workspace/${res.resumeId}`);
-    } else {
-      /**
-       * If Date has passed, res.error will be:
-       * "Your assignment period has ended..."
-       * 
-       * If Admin deactivated account, res.error will be:
-       * "Your account access has been revoked..."
-       */
-      alert(res.error || "Unable to start assignment.");
+  const handleQuickStart = async () => {
+    if (!userId) return alert("Session expired, please login again.");
+    setIsAssigning(true);
+    try {
+      const res = await autoAssignAndGetId(userId);
+      if (res.success) {
+        router.push(`/user/workspace/${res.resumeId}`);
+      } else {
+        alert(res.error || "Unable to start assignment.");
+      }
+    } catch (error) {
+      console.error("Assignment Error:", error);
+      alert("A system error occurred.");
+    } finally {
+      setIsAssigning(false);
     }
-  } catch (error) {
-    console.error("Assignment Error:", error);
-    alert("A system error occurred. Please try again later.");
-  } finally {
-    // 3. Reset Loading UI
-    setIsAssigning(false);
-  }
-};
+  };
 
   const userMenu = [
-    { name: 'Dashboard', icon: <LayoutDashboard size={18} />, path: '/user' },
-    // INTEGRATED ACTION BUTTON
-    { type: 'action', name: 'New Assignment', icon: <PlusCircle size={18} /> },
-    { name: 'Saved Resume', icon: <Bookmark size={18} />, path: '/user/reassigned' },
-    { name: 'Submitted Resume', icon: <CheckCircle size={18} />, path: '/user/submitted' },
-    { name: 'Rejected Resume', icon: <XCircle size={18} />, path: '/user/rejected' },
-    { name: 'Profile', icon: <User size={18} />, path: '/user/profile' },
-    { name: 'My Queries', icon: <MessageSquare size={18} />, path: '/user/queries' },
-    { name: 'Terms & Conditions', icon: <MessageSquare size={18} />, path: '/user/terms' },
-    { name: 'Instructions', icon: <MessageSquare size={18} />, path: '/user/instructions' },
+    { name: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/user' },
+    { type: 'action', name: 'New Resume', icon: <PlusCircle size={20} /> },
+    { name: 'Saved Resume', icon: <Bookmark size={20} />, path: '/user/reassigned' },
+    { name: 'Submitted', icon: <CheckCircle size={20} />, path: '/user/submitted' },
+    { name: 'Rejected', icon: <XCircle size={20} />, path: '/user/rejected' },
+    { name: 'Profile', icon: <User size={20} />, path: '/user/profile' },
+    { name: 'My Queries', icon: <MessageSquare size={20} />, path: '/user/queries' },
+    { name: 'Terms', icon: <FileText size={20} />, path: '/user/terms' },
+    { name: 'Instructions', icon: <LifeBuoy size={20} />, path: '/user/instructions' },
   ];
 
   const adminMenu = [
-    { name: 'Dashboard', icon: <LayoutDashboard size={18} />, path: '/admin' },
-    { name: 'Upload Resume', icon: <UploadCloud size={18} />, path: '/admin/upload' },
-    { name: 'Users', icon: <Users size={18} />, path: '/admin/users' },
-    { name: 'Reassign', icon: <RefreshCw size={18} />, path: '/admin/reassign' },
-    { name: 'Saved', icon: <FilePlus size={18} />, path: '/admin/savedresume' },
-    { name: 'Submitted', icon: <CheckCircle size={18} />, path: '/admin/submitted' },
-    { name: 'KYC Center', icon: <Briefcase size={18} />, path: '/admin/kycreview ' },
-    { name: 'Admin Resumes', icon: <FileText size={18} />, path: '/admin/resumes' },
-    { name: 'Queries', icon: <LifeBuoy size={18} />, path: '/admin/queries' },
+    { name: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin' },
+    { name: 'Upload', icon: <UploadCloud size={20} />, path: '/admin/upload' },
+    { name: 'Users', icon: <Users size={20} />, path: '/admin/users' },
+    { name: 'Reassign', icon: <RefreshCw size={20} />, path: '/admin/reassign' },
+    { name: 'Saved', icon: <FilePlus size={20} />, path: '/admin/savedresume' },
+    { name: 'Submitted', icon: <CheckCircle size={20} />, path: '/admin/submitted' },
+    { name: 'KYC Center', icon: <Briefcase size={20} />, path: '/admin/kycreview' },
+    { name: 'Resumes', icon: <FileText size={20} />, path: '/admin/resumes' },
+    { name: 'Queries', icon: <LifeBuoy size={20} />, path: '/admin/queries' },
   ];
 
   const currentMenu = role === 'admin' ? adminMenu : userMenu;
 
   return (
-    <aside className="fixed inset-y-0 left-0 w-54 bg-black text-slate-200 flex flex-col z-50 border-r border-white/5">
-
-      {/* Brand Logo Section */}
-      <div className="h-24 flex items-center px-8 bg-black">
-        <span className={`${robotoSlab.className} text-white tracking-tighter text-2xl`}>
+    <aside className="fixed inset-y-0 left-0 bg-white text-black flex flex-col z-50 border-r border-slate-300 shadow-lg w-58">
+      {/* Brand Header */}
+      <div className="h-20 flex items-center px-6 border-b border-slate-100 justify-between">
+        <span className={`${robotoSlab.className} text-blue-600 tracking-tighter text-xl font-bold truncate`}>
           Data Tech.
         </span>
       </div>
 
-      {/* Navigation Items */}
-      <nav className="flex-1 overflow-y-auto py-4 space-y-1 no-scrollbar scroll-smooth px-4">
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto py-6 space-y-1.5 no-scrollbar px-4">
         {currentMenu.map((item, index) => {
-          // --- RENDER ACTION BUTTON ---
+          const isActive = pathname === item.path;
+
           if (item.type === 'action') {
             return (
-              <div key="quick-start" className="">
-                <button
-                  onClick={handleQuickStart}
-                  disabled={isAssigning}
-                  className={`${passero.className} w-full cursor-pointer flex items-center text-left gap-3 text-slate-400 hover:text-white py-4 px-6 text-sm uppercase tracking-widest transition-all disabled:opacity-50 group`}
-                >
-                  {/* Corrected Icon: Size 20 and forced alignment */}
-                  <PlusCircle
-                    size={20}
-                    className={`shrink-0 transition-opacity ${isAssigning ? "opacity-50" : "opacity-100 group-hover:text-white"}`}
-                  />
-
-                  {/* Text aligned perfectly next to icon */}
-                  <span className="leading-none mt-0.5">
-                    {isAssigning ? "Processing..." : "New Assignment"}
-                  </span>
-                </button>
-              </div>
+              <button
+                key="action-btn"
+                onClick={handleQuickStart}
+                disabled={isAssigning}
+                className={`${ubuntu.className} w-full flex items-center gap-4 py-3 px-4 rounded-xl transition-all group ${
+                  isAssigning ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-50 text-slate-600 hover:text-blue-600'
+                }`}
+              >
+                <span className="text-slate-400 group-hover:text-blue-600">
+                  {isAssigning ? <Loader2 size={20} className="animate-spin" /> : item.icon}
+                </span>
+                <span className="text-[13px] font-semibold tracking-wide whitespace-nowrap">
+                  {isAssigning ? "Processing..." : item.name}
+                </span>
+              </button>
             );
           }
 
-          // --- RENDER STANDARD LINKS ---
-          const isActive = pathname === item.path;
           return (
             <Link
               key={item.path || index}
               href={item.path}
-              className={`${passero.className} relative text-slate-400 flex items-center gap-3 px-6 py-3.5 rounded-xl transition-all duration-300 group ${isActive ? 'bg-white/5 text-white' : 'hover:bg-white/5 hover:text-white'
-                }`}
+              className={`${ubuntu.className} flex items-center gap-4 py-3 px-4 rounded-xl transition-all duration-200 group ${
+                isActive
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
+                  : 'text-slate-600 hover:bg-blue-50 hover:text-blue-600'
+              }`}
             >
-              <span className={`transition-colors duration-300 ${isActive ? 'text-white' : 'text-slate-500 group-hover:text-white'}`}>
+              <span className={`transition-colors ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-blue-600'}`}>
                 {item.icon}
               </span>
-              <span className="text-sm tracking-wide capitalize">{item.name}</span>
+              <span className="text-[13px] font-semibold tracking-wide whitespace-nowrap">
+                {item.name}
+              </span>
             </Link>
           );
         })}
       </nav>
 
-      {/* Bottom Logout Section */}
-      <div className="px-8 pb-10 mt-auto border-t border-white/5 pt-6">
+      {/* Footer */}
+      <div className="px-6 pb-8 mt-auto border-t border-slate-100 pt-6">
         <button
           onClick={handleLogout}
-          className="flex gap-3 w-full text-slate-400 items-center cursor-pointer transition-all duration-300 group hover:text-red-500"
+          className="flex gap-4 w-full text-black items-center cursor-pointer transition-all hover:text-red-600 group"
         >
-          <LogOut size={18} className="group-hover:-translate-x-1 transition-transform duration-300" />
-          <span className={`${passero.className} text-[13px] tracking-wide`}>
+          <LogOut size={20} className="transition-transform duration-300 group-hover:translate-x-1" />
+          <span className={`${passero.className} text-[13px] font-semibold`}>
             Log Out
           </span>
         </button>

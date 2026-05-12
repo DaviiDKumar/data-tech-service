@@ -117,7 +117,7 @@ export default function AdminUsersPage() {
   );
 
   return (
-    <div className={`p-6 lg:p-10 min-h-screen bg-gray-200 ${robotoSlab.className} text-black`}>
+    <div className={`p-6 lg:p-10 min-h-screen bg-white ${robotoSlab.className} text-black`}>
 
       {/* Header */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 mb-10">
@@ -126,8 +126,8 @@ export default function AdminUsersPage() {
             <span className="w-2 h-2 rounded-full bg-black animate-pulse"></span>
             <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">System Administration</p>
           </div>
-          <h1 className={`${passero.className} text-6xl uppercase italic tracking-tighter leading-none`}>
-            User <span className="opacity-20 italic">Roster</span>
+          <h1 className={`${robotoSlab.className} text-6xl uppercase italic tracking-tighter leading-none`}>
+            Total<span className="opacity-50 text-5xl"> Users</span>
           </h1>
         </div>
 
@@ -302,7 +302,7 @@ export default function AdminUsersPage() {
 
                         <div className="flex items-center gap-2">
 
-                          <div className={`${passero.className} text-3xl text-black leading-none`}>
+                          <div className={`${robotoSlab.className} text-3xl text-black leading-none`}>
                             {user.stats?.approvedCount || 0}
                           </div>
                         </div>
@@ -315,7 +315,7 @@ export default function AdminUsersPage() {
 
                         <div className="flex items-center gap-2">
 
-                          <div className={`${passero.className} text-3xl text-black/20 group-hover:text-red-500/40 transition-colors leading-none`}>
+                          <div className={`${robotoSlab.className} text-3xl text-black/20 group-hover:text-red-500/40 transition-colors leading-none`}>
                             {user.stats?.rejectedCount || 0}
                           </div>
                         </div>

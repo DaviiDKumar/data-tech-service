@@ -9,7 +9,7 @@ import { passero } from "@/lib/fonts";
 // 1. Static Shell: Ye instantly render hoga
 export default function DashboardLayout({ children }) {
   return (
-    <div className="flex min-h-screen bg-gray-200 text-black">
+    <div className="flex min-h-screen bg-white text-black">
       {/* Wrap everything that needs DB/Cookies in Suspense */}
       <Suspense fallback={<DashboardSkeleton />}>
         <DashboardAsyncContent>{children}</DashboardAsyncContent>
@@ -54,7 +54,7 @@ async function DashboardAsyncContent({ children }) {
       <ClientInitializer user={userData} />
       <Sidebar initialUser={userData} />
       
-      <main className="flex-1 ml-54 flex flex-col transition-all duration-500">
+      <main className="flex-1 ml-58 flex flex-col transition-all duration-500">
         <header className="h-20 flex items-center border-b-2 border-slate-300 justify-between px-10 sticky top-0 z-40 backdrop-blur-xl">
           <div className={`${passero.className} text-[12px] text-black uppercase tracking-[4px]`}>
             DATATECH SERVICE

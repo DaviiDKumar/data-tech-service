@@ -171,9 +171,9 @@ export async function loginUser(formData) {
       maxAge: 60 * 60 * 24 * 7, // 7 Days
     };
 
-    cookieStore.set('role', user.role, cookieOptions);
-    cookieStore.set('userId', user._id.toString(), cookieOptions);
-    cookieStore.set('userName', user.name, cookieOptions);
+    cookieStore.set('role', user.role, cookieOptions, { httpOnly: true });
+    cookieStore.set('userId', user._id.toString(), cookieOptions,{ httpOnly: true });
+    cookieStore.set('userName', user.name, cookieOptions,{ httpOnly: true });
 
     return { success: true, role: user.role };
 

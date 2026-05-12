@@ -57,17 +57,17 @@ export default function UploadPage() {
   };
 
   return (
-    <div className={`p-6 md:p-10 max-w-5xl mx-auto space-y-8 bg-gray-200 min-h-screen ${robotoSlab.className} text-black`}>
+    <div className={`p-6 md:p-10  mx-auto space-y-8 bg-white min-h-screen ${robotoSlab.className} text-black`}>
 
       {/* --- HEADER --- */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-white pb-8">
         <div className="space-y-1">
           <div className="flex items-center gap-2 mb-2">
-            <span className="w-2 h-2 rounded-full bg-black animate-pulse"></span>
-            <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">System Ingestion Node</p>
+          
+            <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">Resume Upload Page</p>
           </div>
-          <h1 className={`${passero.className} text-5xl uppercase italic tracking-tighter leading-none`}>
-            Data <span className="opacity-20 italic">Ingestion</span>
+          <h1 className={`${ robotoSlab.className} text-5xl uppercase italic tracking-tighter leading-none`}>
+            Upload <span className="opacity-50 text-4xl ">Resumes</span>
           </h1>
         </div>
         <div className="text-right">
@@ -116,7 +116,7 @@ export default function UploadPage() {
               onClick={handleUpload}
               className="px-10 py-4 bg-black text-white text-[10px] font-black uppercase tracking-[0.3em] rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-xl flex items-center gap-3"
             >
-              <Zap size={14} /> Commit to Pipeline
+              <Zap size={14} /> Upload Resumes
             </button>
           </motion.div>
         )}
@@ -127,7 +127,7 @@ export default function UploadPage() {
             <div className="mt-10 max-w-xs mx-auto space-y-3">
               <div className="flex justify-between text-[9px] font-black text-black uppercase tracking-[0.2em]">
                 <span className="flex items-center gap-2">
-                  <Loader2 size={12} className="animate-spin" /> Ingesting Blobs...
+                  <Loader2 size={12} className="animate-spin" /> Uploading...
                 </span>
                 <span>{progress}%</span>
               </div>
@@ -162,8 +162,8 @@ export default function UploadPage() {
                   {uploadResults.success ? <ShieldCheck size={24} /> : <AlertCircle size={24} />}
                 </div>
                 <div>
-                  <h4 className={`${passero.className} text-xl uppercase tracking-wider leading-none mb-1`}>
-                    {uploadResults.count || 0} Synchronized / {uploadResults.duplicateCount || 0} Redundant
+                  <h4 className={`${robotoSlab.className} text-xl uppercase tracking-wider leading-none mb-1`}>
+                    {uploadResults.count || 0} Uploaded / {uploadResults.duplicateCount || 0} Duplicates
                   </h4>
                   <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest leading-none">
                     {uploadResults.message}

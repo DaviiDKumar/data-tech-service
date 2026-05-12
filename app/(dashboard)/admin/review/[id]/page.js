@@ -25,7 +25,6 @@ function AdminReviewDetailContent() {
         const res = await getAdminReports(["submitted", "approved", "rejected"]);
         if (!cancelled && res.success) {
           const currentItem = res.data.find(item => item._id === id);
-          console.log(currentItem);
           if (currentItem) setDetail(currentItem);
         }
       } catch (err) {
@@ -46,7 +45,6 @@ function AdminReviewDetailContent() {
     setIsActionLoading(false);
   };
 
-  
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-gray-200 gap-4">
       <Loader2 className="animate-spin text-black" size={40} />
@@ -54,8 +52,13 @@ function AdminReviewDetailContent() {
     </div>
   );
 
-
   const formData = detail?.formData || {};
+
+  // Build a Google Docs viewer URL to force inline preview (no download)
+  const pdfUrl = detail?.resumeId?.fileUrl;
+  const googleViewerUrl = pdfUrl
+    ? `https://docs.google.com/gview?url=${encodeURIComponent(pdfUrl)}&embedded=true`
+    : null;
 
   return (
     <div className={`h-screen flex flex-col bg-gray-200 overflow-hidden ${robotoSlab.className} text-black`}>
@@ -98,18 +101,28 @@ function AdminReviewDetailContent() {
 
       <main className="flex flex-1 overflow-hidden p-6 gap-6">
         
-        {/* LEFT: DOCUMENT NODE */}
+        {/* LEFT: PDF INLINE VIEWER */}
         <section className="w-1/2 rounded-[3rem] overflow-hidden bg-white shadow-xl border border-white">
-            <div className="h-full relative group">
-              <iframe 
-                src={`${detail?.resumeId?.fileUrl}#toolbar=0`} 
-                className="w-full h-full grayscale hover:grayscale-0 transition-all duration-700" 
-                title="Review PDF" 
+          <div className="h-full relative group">
+            {googleViewerUrl ? (
+              <iframe
+                src={googleViewerUrl}
+                className="w-full h-full"
+                title="Review PDF"
+                allow="autoplay"
+                // key forces remount if URL changes
+                key={googleViewerUrl}
               />
-              <div className="absolute top-6 left-6 bg-black text-white px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
-                Live Source Preview
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center gap-4 text-black/20">
+                <FileText size={48} />
+                <span className="text-xs font-black uppercase tracking-widest">No Document Found</span>
               </div>
+            )}
+            <div className="absolute top-6 left-6 bg-black text-white px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+              Live Source Preview
             </div>
+          </div>
         </section>
 
         {/* RIGHT: DATA EXTRACTION FORGE */}
