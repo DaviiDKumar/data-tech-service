@@ -11,6 +11,7 @@ import {
 import { useRouter } from "next/navigation";
 import { autoAssignAndGetId } from "@/app/actions/userWork";
 import { getUserTodayAndTotalWork } from "@/app/actions/userWork";
+import Logout from "@/components/Logout";
 
 
 
@@ -22,6 +23,7 @@ export default function UserDashboard() {
 
 
   const userId = user?.id || user?._id;
+  const endDate = user?.endDate || user?.stats?.endDate;
   const [isAssigning, setIsAssigning] = useState(false);
 
   // Inside UserDashboard.js
@@ -126,8 +128,26 @@ export default function UserDashboard() {
 
 
   return (
-    <div className={`min-h-screen  p-8 lg:p-12 ${robotoSlab.className}`}>
+    <div className={`min-h-screen pt-0 p-8 lg:p-12 lg:pt-0 ${robotoSlab.className}`}>
       <div className="max-w-6xl mx-auto space-y-12">
+        <header className="h-20 flex items-center border-b-2 border-slate-300 justify-between  sticky top-0 z-40 backdrop-blur-xl">
+
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              <div className="text-left">
+                <p className={`${passero.className} text-[18px] font-bold text-violet-700 leading-none`}>
+                  User ID : <span className={` ${robotoSlab.className} text-[17px] font-bold text-black`}> {userId || "N/A"}</span>
+                </p>
+                <p className={`${passero.className} text-[15px] font-bold text-violet-700 leading-none mt-1`}>
+                  Last Date : <span className={` ${robotoSlab.className} text-[13px] font-bold text-black`} > {endDate? new Date( endDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : "N/A"}</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <Logout />
+
+        </header>
 
         {/* --- WELCOME HEADER --- */}
         <div className="space-y-1">

@@ -2,18 +2,18 @@
 import dynamic from 'next/dynamic';
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { 
-    saveResumeProgress, 
-    submitResume, 
-    holdAndSaveResume, 
-    getWorkspaceData 
+import {
+    saveResumeProgress,
+    submitResume,
+    holdAndSaveResume,
+    getWorkspaceData
 } from "@/app/actions/userWork";
 import { useUserStore } from "@/store/useUserStore";
 import { passero } from "@/lib/fonts";
 import {
-    ArrowLeft, CheckCircle, Loader2, 
-    Save, FileText, Database, User, 
-    GraduationCap, Briefcase, MapPin, Lock, Eye
+    ArrowLeft, CheckCircle, Loader2,
+    FileText, Database, User,
+    GraduationCap, Briefcase, MapPin, Lock, ArrowUpRight, CloudCheck, Maximize2
 } from "lucide-react";
 import Link from "next/link";
 
@@ -21,7 +21,7 @@ function WorkspaceContent() {
     const { id } = useParams();
     const router = useRouter();
     const searchParams = useSearchParams();
-    
+
     const userId = useUserStore((state) => state.user?.id);
     const userEndDate = useUserStore((state) => state.user?.endDate);
     const { updateUser } = useUserStore();
@@ -193,7 +193,7 @@ function WorkspaceContent() {
         <div className="h-screen flex flex-col bg-white overflow-hidden font-sans select-none">
 
             {/* ── HEADER ── */}
-            <header className="shrink-0 h-16 border-b border-black px-6 flex items-center justify-between bg-white z-50">
+            <header className="shrink-0 h-24 border-b border-slate-500 px-6 flex items-center justify-between bg-white z-50">
                 <div className="flex items-center gap-4">
                     <Link
                         href={isReadOnly ? "/user/rejected" : "/user/allresumesavailable"}
@@ -201,29 +201,54 @@ function WorkspaceContent() {
                     >
                         <ArrowLeft size={18} />
                     </Link>
-                    <div className="w-px h-6 bg-black" />
-                    <div className="flex flex-col">
-                        <h2 className="text-[11px] font-black uppercase text-black flex items-center gap-2">
+                    <div className="w-px h-12 bg-black" />
+                    <div className="flex flex-col gap-2">
+                        <h2 className="text-[14px] font-black  text-black flex items-center gap-2">
                             <FileText size={14} />
-                            <span className="truncate max-w-xs">{resume?.originalName || "Untitled Resume"}</span>
+                            <span className="max-w-xs">{resume?.originalName || "Untitled Resume"}</span>
                         </h2>
                         {!isReadOnly && (
-                            <span className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-1 ${saveStatus === 'syncing' ? 'text-zinc-400' : 'text-emerald-600'}`}>
+                            <span className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-2 ${saveStatus === 'syncing' ? 'text-zinc-400' : 'text-emerald-600'}`}>
                                 {saveStatus === 'syncing'
-                                    ? <><Loader2 size={10} className="animate-spin" /> Syncing...</>
-                                    : <><CheckCircle size={10} /> Data Synced</>}
+                                    ? <><Loader2 size={14} className="animate-spin " /> Syncing...</>
+                                    : <><CheckCircle size={14} />  Data Synced</>}
                             </span>
                         )}
                     </div>
                 </div>
 
                 {!isReadOnly && (
-                    <div className="flex items-center gap-3">
-                        <button onClick={handleHoldSave} disabled={isActionLoading} className="px-5 py-2.5 border-2 border-black text-[10px] font-black uppercase tracking-widest hover:bg-black hover:text-white transition-all disabled:opacity-30 rounded-lg">
-                            {isActionLoading ? <Loader2 size={12} className="animate-spin" /> : <span className="flex items-center gap-2"><Save size={12} /> Hold & Save</span>}
+                    <div className="flex items-center gap-4">
+                        {/* --- HOLD & SAVE BUTTON (Violet Theme) --- */}
+                        <button
+                            onClick={handleHoldSave}
+                            disabled={isActionLoading}
+                            className="group px-6 py-3 border-2 border-violet-600 bg-white text-violet-600 text-[10px] font-black uppercase tracking-[0.2em] cursor-pointer hover:bg-violet-600 hover:text-white hover:shadow-[0_0_20px_rgba(124,58,237,0.4)] transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl flex items-center justify-center min-w-[150px]"
+                        >
+                            {isActionLoading ? (
+                                <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                                <span className="flex items-center gap-2">
+                                    <CloudCheck size={16} className="group-hover:scale-110 transition-transform" />
+                                    Hold & Save
+                                </span>
+                            )}
                         </button>
-                        <button onClick={handleSubmit} disabled={isActionLoading} className="px-5 py-2.5 bg-black text-white text-[10px] font-black uppercase tracking-widest hover:bg-zinc-800 transition-all shadow-md disabled:opacity-30 rounded-lg">
-                            {isActionLoading ? <Loader2 size={12} className="animate-spin" /> : "Submit Final"}
+
+                        {/* --- SUBMIT FINAL BUTTON (Green Theme) --- */}
+                        <button
+                            onClick={handleSubmit}
+                            disabled={isActionLoading}
+                            className="group px-6 py-3 bg-emerald-600 border-2 border-emerald-600 text-white text-[10px] font-black uppercase tracking-[0.2em] cursor-pointer hover:bg-emerald-700 hover:border-emerald-700 hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl flex items-center justify-center min-w-[150px]"
+                        >
+                            {isActionLoading ? (
+                                <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                                <span className="flex items-center gap-2">
+                                    Submit Final
+                                    <ArrowUpRight size={16} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                                </span>
+                            )}
                         </button>
                     </div>
                 )}
@@ -233,22 +258,49 @@ function WorkspaceContent() {
             <main className="flex flex-1 min-h-0 overflow-hidden">
 
                 {/* LEFT: PDF VIEWER */}
-                <section className="w-1/2 h-full flex flex-col bg-zinc-100 border-r border-black overflow-hidden">
-                    <div className="flex-1 p-4 overflow-hidden">
-                        <div className="w-full h-full rounded-3xl overflow-hidden border-2 border-black bg-white shadow-2xl">
+                <section className="w-1/2 h-full flex flex-col border-r-2 bg-white  overflow-hidden">
+                    
+
+                    {/* --- MAIN VIEWER CONTAINER --- */}
+                    <div className="flex-1 bg-zinc-200 p-4 relative overflow-hidden">
+                        {/* This container acts as the "Desk" */}
+                        <div className="w-full h-full bg-white rounded-2xl border-2 border-black shadow-[10px_10px_0px_0px_rgba(0,0,0,0.05)] relative overflow-hidden">
+
                             {resume?.fileUrl ? (
-                                <iframe
-                                    src={`https://docs.google.com/viewer?url=${encodeURIComponent(resume.fileUrl)}&embedded=true`}
-                                    className="w-full h-full"
-                                    title="Resume Preview"
-                                />
+                                <div className="w-full h-full relative">
+                                    {/* VIOLET OVERLAY HACK: 
+                        This white frame sits ABOVE the iframe to hide the black edges 
+                        and give it a clean "Paper" look.
+                    */}
+                                    <div className="absolute inset-0 pointer-events-none border-[16px] border-white z-10" />
+
+                                    <iframe
+                                        src={`https://docs.google.com/viewer?url=${encodeURIComponent(resume.fileUrl)}&embedded=true`}
+                                        className="w-full h-full relative z-0 bg-white"
+                                        style={{ border: 'none' }}
+                                        title="Resume Preview"
+                                    />
+                                </div>
                             ) : (
-                                <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-zinc-300">
-                                    <FileText size={48} />
-                                    <span className="text-[10px] font-black uppercase tracking-widest">No Document</span>
+                                <div className="w-full h-full flex flex-col items-center justify-center gap-4 bg-white">
+                                    <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center border-2 border-dashed border-slate-200">
+                                        <FileText size={24} className="text-slate-300" />
+                                    </div>
+                                    <div className="text-center">
+                                        <span className="block text-[10px] font-black uppercase tracking-[0.3em] text-slate-300 italic">Awaiting Document...</span>
+                                    </div>
                                 </div>
                             )}
                         </div>
+                    </div>
+
+                    {/* --- FOOTER STATUS --- */}
+                    <div className="px-6 py-3 bg-white border-t-2 border-slate-100 flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                            <span className="text-[8px] font-bold uppercase tracking-widest text-slate-400">SSL Encrypted Stream</span>
+                        </div>
+                        <span className={`${passero.className} text-xs text-slate-300 opacity-50`}>DataSort Reader v2</span>
                     </div>
                 </section>
 
@@ -360,7 +412,7 @@ function FormSection({ icon, title, children }) {
 function Input({ label, name, value, onChange, type = "text", disabled = false }) {
     return (
         <div className="space-y-1.5">
-            <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">{label}</label>
+            <label className="text-[12px] font-semibold tracking-widest text-zinc-800">{label}</label>
             <input
                 type={type}
                 name={name}
@@ -369,7 +421,7 @@ function Input({ label, name, value, onChange, type = "text", disabled = false }
                 disabled={disabled}
                 className={`w-full border-2 rounded-xl px-5 py-3.5 text-xs font-bold outline-none transition-all placeholder:text-zinc-300
                     ${disabled
-                        ? 'bg-zinc-50 border-zinc-100 text-zinc-500 cursor-not-allowed'
+                        ? 'bg-zinc-50 border-zinc-100 text-zinc-800 cursor-not-allowed'
                         : 'bg-white border-zinc-200 focus:border-black cursor-text'
                     }`}
                 placeholder={disabled ? "" : "---"}
