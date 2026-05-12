@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
-export function middleware(request) {
+// Renamed from 'middleware' to 'proxy' for Next.js 16 compatibility
+export function proxy(request) {
   // 1. Get cookies from the browser
   const role = request.cookies.get('role')?.value;
   const userId = request.cookies.get('userId')?.value;
@@ -14,7 +15,6 @@ export function middleware(request) {
   // 3. Admin Protection: If role is NOT admin, block /admin routes
   if (pathname.startsWith('/admin')) {
     if (role !== 'admin') {
-      // Send them to their own user dashboard if they try to sneak into admin
       return NextResponse.redirect(new URL('/user', request.url));
     }
   }
@@ -22,7 +22,6 @@ export function middleware(request) {
   // 4. User Protection: If role is NOT user, block /user routes
   if (pathname.startsWith('/user')) {
     if (role !== 'user') {
-      // Send them to admin dashboard if they are an admin
       return NextResponse.redirect(new URL('/admin', request.url));
     }
   }
@@ -30,7 +29,7 @@ export function middleware(request) {
   return NextResponse.next();
 }
 
-// 5. Tell Next.js which routes to run this on
+// The config remains the same, ensuring this logic only runs on protected routes
 export const config = {
   matcher: [
     '/admin/:path*', 
