@@ -9,7 +9,7 @@ const nextConfig = {
       },
     ],
   },
-  // Remove Turbopack and cacheComponents for production stability
+
 };
 
 export default nextConfig;
