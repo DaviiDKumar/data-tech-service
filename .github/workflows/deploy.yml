@@ -23,6 +23,7 @@ jobs:
         env:
           # If your build needs env variables (like DB URLs), add them here:
           NEXT_PUBLIC_BASE_URL: https://datatechservice.in
+          MONGODB_URI: mongodb+srv://davidbkbiet2025:davidbkbiet2025@cluster0.pll0ymz.mongodb.net/dtstest=Cluster0
 
       - name: Deploy to Hostinger via SCP
         uses: appleboy/scp-action@master
