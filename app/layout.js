@@ -2,8 +2,9 @@ import "./globals.css";
 import { passero, robotoSlab, ubuntu } from "@/lib/fonts";
 
 export const metadata = {
-  title: "DATATECHSERVICES | Data Processing System",
-};
+  title: 'DataTechService | Expert Data Solutions',
+  description: 'The leading platform for managed data services and web insights.',
+}
 
 export default function RootLayout({ children }) {
   return (

@@ -487,3 +487,38 @@ export async function getRejectedResumes(userId) {
         return { success: false, error: error.message };
     }
 }
+
+
+export async function getUserTodayAndTotalWork(userId) {
+    try {
+        await connectDB();
+
+        // 1. Get the start of Today (00:00:00)
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+
+        // 2. Count Total Completed (Submitted + Saved) - ALL TIME
+        const totalCompleted = await ResumeInstance.countDocuments({
+            userId,
+            status: { $in: ["submitted", "saved", "approved"] }
+        });
+
+        // 3. Count Completed TODAY only
+        const todayCompleted = await ResumeInstance.countDocuments({
+            userId,
+            status: { $in: ["submitted", "saved"] },
+            updatedAt: { $gte: startOfToday } // Filter by timestamp
+        });
+
+        return {
+            success: true,
+            counts: {
+                total: totalCompleted,
+                today: todayCompleted
+            }
+        };
+    } catch (error) {
+        console.error("Error fetching work counts:", error);
+        return { success: false, counts: { total: 0, today: 0 } };
+    }
+}

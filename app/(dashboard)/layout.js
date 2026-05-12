@@ -4,10 +4,16 @@ import { cookies } from "next/headers";
 import ClientInitializer from "@/components/ClientInitializer";
 import connectDB from "@/lib/db";
 import User from "@/models/User";
-import { passero } from "@/lib/fonts";
+import { passero, robotoSlab } from "@/lib/fonts";
 
+
+import Logout from "@/components/Logout";
 // 1. Static Shell: Ye instantly render hoga
 export default function DashboardLayout({ children }) {
+
+
+
+
   return (
     <div className="flex min-h-screen bg-white text-black">
       {/* Wrap everything that needs DB/Cookies in Suspense */}
@@ -43,34 +49,45 @@ async function DashboardAsyncContent({ children }) {
     bankDetailsStatus: fullUser.bankDetailsStatus || 'pending',
     kycDetails: fullUser.kycDetails || {},
     bankDetails: fullUser.bankDetails || {},
+    endDate: fullUser.endDate || {},
+    startDate: fullUser.startDate || {},
+    isActive: fullUser.isActive || false,
+    
   } : {
     id: userId || null,
     role: (await cookies()).get('role')?.value || 'user',
     name: (await cookies()).get('userName')?.value || 'User',
   };
 
+
+
+
+
+
+
   return (
     <>
       <ClientInitializer user={userData} />
       <Sidebar initialUser={userData} />
-      
+
       <main className="flex-1 ml-58 flex flex-col transition-all duration-500">
         <header className="h-20 flex items-center border-b-2 border-slate-300 justify-between px-10 sticky top-0 z-40 backdrop-blur-xl">
-          <div className={`${passero.className} text-[12px] text-black uppercase tracking-[4px]`}>
-            DATATECH SERVICE
-          </div>
+
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-3">
-              <div className="text-right">
-                <p className={`${passero.className} text-xs text-black leading-none`}>
-                  {userData.name}
+              <div className="text-left">
+                <p className={`${passero.className} text-[18px] font-bold text-violet-700 leading-none`}>
+                  User ID : <span className={` ${robotoSlab.className} text-[17px] font-bold text-black`}> {userData.id || "N/A"}</span>
                 </p>
-                <p className="text-[9px] text-black/40 font-bold uppercase tracking-widest mt-1">
-                  {userData.role} Account
+                <p className={`${passero.className} text-[15px] font-bold text-violet-700 leading-none mt-1`}>
+                  Last Date : <span className={` ${robotoSlab.className} text-[13px] font-bold text-black`} > {userData.endDate ? new Date(userData.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : "N/A"}</span>
                 </p>
               </div>
             </div>
           </div>
+
+          <Logout />
+
         </header>
         <div>{children}</div>
       </main>

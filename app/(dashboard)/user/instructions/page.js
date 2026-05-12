@@ -18,13 +18,13 @@ export default function InstructionsPage() {
   if (!mounted) return null;
 
   return (
-    <div className={`min-h-screen bg-gray-200 p-6 lg:p-10 ${robotoSlab.className} text-black`}>
-      <div className="max-w-5xl mx-auto space-y-8">
+    <div className={`min-h-screen bg-white p-6 lg:p-10 ${robotoSlab.className} text-black`}>
+      <div className=" mx-auto space-y-8">
         
         {/* --- HEADER --- */}
         <header className="flex flex-col md:flex-row justify-between items-center bg-white p-8 rounded-[2.5rem] shadow-sm">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-black rounded-2xl flex items-center justify-center shadow-lg transform rotate-3">
+            <div className="w-12 h-12 bg-violet-700 rounded-2xl flex items-center justify-center shadow-lg transform rotate-3">
               <FileText className="text-white" size={24} />
             </div>
             <div>
@@ -102,7 +102,7 @@ export default function InstructionsPage() {
 function InstructionSection({ title, icon, children }) {
   return (
     <div className="bg-white rounded-[2.5rem] shadow-sm overflow-hidden border border-white transition-all hover:shadow-md">
-      <div className="bg-black text-white px-8 py-5 flex items-center gap-3">
+      <div className="bg-violet-700 text-white px-8 py-5 flex items-center gap-3">
         {icon}
         <h2 className={`${passero.className} text-xl uppercase tracking-wider`}>{title}</h2>
       </div>
