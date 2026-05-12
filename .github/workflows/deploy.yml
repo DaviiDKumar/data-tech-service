@@ -21,9 +21,10 @@ jobs:
           npm install
           npm run build
         env:
-          NEXT_PUBLIC_BASE_URL: https://datatechservice.in
-          # Note: Using secrets is safer than hardcoding strings here
+          # GitHub uses these to connect to your DB during the build
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+          NEXT_PUBLIC_BASE_URL: https://datatechservice.in
 
       - name: Deploy to Hostinger via SCP
         uses: appleboy/scp-action@master
@@ -33,11 +34,11 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           port: 65002
           rm: true 
-          # FIXED: Added app/, lib/, and src/ to the source list
+          # This sends the BUILD results (.next) and the SOURCE folders
           source: ".next/,public/,package.json,next.config.mjs,server.js,app/,lib/,models/,store/,components/,components.json,postcss.config.mjs,jsconfig.json"
           target: "domains/datatechservice.in/nodejs/"
 
-      - name: Restart Node.js App
+      - name: Restart & Cleanup
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.HOST }}
@@ -45,13 +46,6 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           port: 65002
           script: |
-            pkill -9 node || true
             cd domains/datatechservice.in/nodejs/
-            # Install production dependencies on the server
             PATH=/opt/alt/alt-nodejs20/root/usr/bin:$PATH /opt/alt/alt-nodejs20/root/usr/bin/npm install --production
-            
-            # Ensure the env key is present
-            if [ ! -f .env ]; then touch .env; fi
-            if ! grep -q "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY" .env; then
-              echo "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=6f753060662d46698656822459461156" >> .env
-            fi
+            pkill -9 node || true
