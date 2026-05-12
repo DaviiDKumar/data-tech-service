@@ -9,13 +9,7 @@ const nextConfig = {
       },
     ],
   },
-  // In Next.js 16, 'turbo' is now 'turbopack'
-  turbopack: {
-    // Your Turbopack settings here
-  },
-  // This is also a good time to ensure caching is enabled 
-  // if you're using the new React 19 features
-  cacheComponents: true, 
+  // Remove Turbopack and cacheComponents for production stability
 };
 
 export default nextConfig;
