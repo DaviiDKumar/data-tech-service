@@ -9,7 +9,11 @@ const nextConfig = {
       },
     ],
   },
-
+  experimental: {
+    serverActions: {
+      allowedOrigins: ['datatechservice.in', 'www.datatechservice.in'],
+    },
+  },
 };
 
 export default nextConfig;
