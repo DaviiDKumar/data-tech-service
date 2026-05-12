@@ -2,11 +2,14 @@
   "name": "dashboard-fast",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
-  "dev": "next dev",
-  "build": "next build",
- "start": "next start -H 0.0.0.0 -p $PORT"
-},
+ 
+ "scripts": {
+ "dev": "next dev",
+ "build": "next build",
+ "start": "next start"
+ },
+
+
   "dependencies": {
     "@tailwindcss/postcss": "^4.3.0",
     "bcryptjs": "^3.0.3",
