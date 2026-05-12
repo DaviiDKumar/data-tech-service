@@ -21,9 +21,9 @@ jobs:
           npm install
           npm run build
         env:
-          # If your build needs env variables (like DB URLs), add them here:
           NEXT_PUBLIC_BASE_URL: https://datatechservice.in
-          MONGODB_URI: mongodb+srv://davidbkbiet2025:davidbkbiet2025@cluster0.pll0ymz.mongodb.net/dtstest=Cluster0
+          # Note: Using secrets is safer than hardcoding strings here
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
 
       - name: Deploy to Hostinger via SCP
         uses: appleboy/scp-action@master
@@ -32,9 +32,9 @@ jobs:
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           port: 65002
-          # rm: true ensures the old .next folder is cleared before the new one is uploaded
           rm: true 
-          source: ".next/,public/,package.json,next.config.mjs,server.js"
+          # FIXED: Added app/, lib/, and src/ to the source list
+          source: ".next/,public/,package.json,next.config.mjs,server.js,app/,lib/,src/"
           target: "domains/datatechservice.in/nodejs/"
 
       - name: Restart Node.js App
@@ -45,10 +45,13 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           port: 65002
           script: |
-            # Kill old processes and let Hostinger's passenger/manager restart it
             pkill -9 node || true
             cd domains/datatechservice.in/nodejs/
-            # Ensure the env key is present so login doesn't break
+            # Install production dependencies on the server
+            PATH=/opt/alt/alt-nodejs20/root/usr/bin:$PATH /opt/alt/alt-nodejs20/root/usr/bin/npm install --production
+            
+            # Ensure the env key is present
+            if [ ! -f .env ]; then touch .env; fi
             if ! grep -q "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY" .env; then
               echo "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=6f753060662d46698656822459461156" >> .env
             fi
