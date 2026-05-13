@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import { uploadBulkResumes } from "@/app/actions/resume";
 import { motion, AnimatePresence } from "framer-motion";
 import { passero, robotoSlab } from "@/lib/fonts";
 import {
@@ -17,11 +18,12 @@ export default function UploadPage() {
   const [progress, setProgress] = useState(0);
   const [uploadResults, setUploadResults] = useState(null);
   const [selectedFiles, setSelectedFiles] = useState([]);
-  const [uploadPhase, setUploadPhase] = useState("idle"); // "idle" | "sending" | "processing" | "done"
+  const [uploadPhase, setUploadPhase] = useState("idle");
   const fileInputRef = useRef(null);
+  const intervalRef = useRef(null);
   const [currentTime, setCurrentTime] = useState("");
 
-  // Hydration-safe clock that ticks every second
+  // Ticking clock
   useEffect(() => {
     const tick = () => setCurrentTime(new Date().toLocaleTimeString());
     tick();
@@ -29,78 +31,88 @@ export default function UploadPage() {
     return () => clearInterval(id);
   }, []);
 
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
+
+  // Server Actions don't expose real byte progress.
+  // This simulates a smooth fill: fast early, slows near 90%, 
+  // then snaps to 100% when the action resolves.
+  const startProgressSimulation = () => {
+    setProgress(0);
+    setUploadPhase("uploading");
+    let current = 0;
+
+    intervalRef.current = setInterval(() => {
+      const increment = current < 40 ? 3 : current < 70 ? 1.5 : 0.4;
+      current = Math.min(current + increment, 90);
+      setProgress(Math.round(current));
+      if (current >= 90) {
+        setUploadPhase("processing");
+        clearInterval(intervalRef.current);
+      }
+    }, 200);
+  };
+
+  const stopProgress = () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  };
+
   const handleFileChange = (e) => {
     setSelectedFiles(Array.from(e.target.files));
     if (uploadResults) setUploadResults(null);
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (selectedFiles.length === 0) return;
 
     setIsUploading(true);
-    setProgress(0);
-    setUploadPhase("sending");
+    startProgressSimulation();
 
     const formData = new FormData();
     selectedFiles.forEach((f) => formData.append("files", f));
 
-    // XHR gives us real upload.onprogress — fetch does not
-    const xhr = new XMLHttpRequest();
+    try {
+      const result = await uploadBulkResumes(formData);
 
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        // Cap at 90%: last 10% reserved for server-side Cloudinary processing
-        const pct = Math.round((e.loaded / e.total) * 90);
-        setProgress(pct);
-        if (pct >= 90) setUploadPhase("processing");
-      }
-    };
-
-    xhr.onload = () => {
+      stopProgress();
       setProgress(100);
       setUploadPhase("done");
 
-      try {
-        const result = JSON.parse(xhr.responseText);
-        setTimeout(() => {
-          setUploadResults(result);
-          setIsUploading(false);
-          setProgress(0);
-          setUploadPhase("idle");
-          setSelectedFiles([]);
-          if (fileInputRef.current) fileInputRef.current.value = "";
-        }, 600);
-      } catch {
-        setUploadResults({ success: false, error: "Invalid server response." });
+      setTimeout(() => {
+        setUploadResults(result);
         setIsUploading(false);
         setProgress(0);
         setUploadPhase("idle");
-      }
-    };
-
-    xhr.onerror = () => {
-      setUploadResults({ success: false, error: "Network error. Please retry." });
+        setSelectedFiles([]);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }, 500);
+    } catch (err) {
+      stopProgress();
+      setUploadResults({ success: false, error: err.message || "Upload failed." });
       setIsUploading(false);
       setProgress(0);
       setUploadPhase("idle");
-    };
-
-    // POST directly to the API route — Server Actions don't support upload progress
-    xhr.open("POST", "/api/upload-resumes");
-    xhr.send(formData);
-  };
-
-  const phaseLabel = {
-    idle: "",
-    sending: "Sending files...",
-    processing: "Processing on Cloudinary...",
-    done: "Complete",
+    }
   };
 
   const clearFiles = () => {
     setSelectedFiles([]);
     setUploadResults(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const phaseLabel = {
+    idle: "",
+    uploading: "Sending files...",
+    processing: "Processing on Cloudinary...",
+    done: "Complete",
   };
 
   return (
@@ -118,8 +130,7 @@ export default function UploadPage() {
           <h1
             className={`${robotoSlab.className} text-5xl uppercase italic tracking-tighter leading-none`}
           >
-            Upload{" "}
-            <span className="opacity-50 text-4xl">Resumes</span>
+            Upload <span className="opacity-50 text-4xl">Resumes</span>
           </h1>
         </div>
         <div className="text-right">
@@ -147,7 +158,9 @@ export default function UploadPage() {
 
         <label
           htmlFor="resume-upload"
-          className={`cursor-pointer block group ${isUploading ? "pointer-events-none" : ""}`}
+          className={`cursor-pointer block group ${
+            isUploading ? "pointer-events-none" : ""
+          }`}
         >
           <div className="w-20 h-20 bg-gray-50 text-black/10 rounded-[2rem] flex items-center justify-center mx-auto group-hover:bg-black group-hover:text-white transition-all duration-500 shadow-inner">
             <Upload size={32} />
@@ -188,7 +201,7 @@ export default function UploadPage() {
           </motion.div>
         )}
 
-        {/* Real progress bar */}
+        {/* Progress bar */}
         <AnimatePresence>
           {isUploading && (
             <motion.div
@@ -207,7 +220,7 @@ export default function UploadPage() {
               <div className="bg-gray-100 h-1.5 rounded-full overflow-hidden shadow-inner">
                 <motion.div
                   animate={{ width: `${progress}%` }}
-                  transition={{ ease: "linear", duration: 0.15 }}
+                  transition={{ ease: "linear", duration: 0.2 }}
                   className="bg-black h-full rounded-full"
                 />
               </div>
@@ -256,7 +269,9 @@ export default function UploadPage() {
                     className={`${robotoSlab.className} text-xl uppercase tracking-wider leading-none mb-1`}
                   >
                     {uploadResults.success
-                      ? `${uploadResults.count || 0} Uploaded / ${uploadResults.duplicateCount || 0} Duplicates`
+                      ? `${uploadResults.count || 0} Uploaded / ${
+                          uploadResults.duplicateCount || 0
+                        } Duplicates`
                       : "Upload Failed"}
                   </h4>
                   <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest leading-none">

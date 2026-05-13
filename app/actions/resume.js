@@ -1,4 +1,5 @@
 "use server";
+
 import connectDB from "@/lib/db";
 import Resume from "@/models/Resume";
 import { cookies } from "next/headers";
@@ -85,9 +86,7 @@ export async function uploadBulkResumes(formData) {
     revalidatePath("/admin/upload");
     revalidatePath("/admin/resumes");
 
-    // 5. Return only what the UI needs — avoids Next.js 4MB Server Action payload limit
-    //    Returning full Mongoose docs for 50 files causes:
-    //    "An unexpected response was received from the server"
+    // 5. Return only what the UI needs — avoids Next.js payload size limit
     return {
       success: true,
       count: savedDocs.length,
@@ -117,21 +116,26 @@ export async function getResumes(page = 1, limit = 5, search = "") {
       query = {
         $or: [
           { originalName: { $regex: search, $options: "i" } },
-          { resumeNo: isNaN(search) ? undefined : Number(search) }
-        ].filter(Boolean)
+          { resumeNo: isNaN(search) ? undefined : Number(search) },
+        ].filter(Boolean),
       };
     }
 
     const [resumes, total] = await Promise.all([
-      Resume.find(query).select('-fileData').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
-      Resume.countDocuments(query)
+      Resume.find(query)
+        .select("-fileData")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Resume.countDocuments(query),
     ]);
 
     return {
       success: true,
       data: JSON.parse(JSON.stringify(resumes)),
       totalPages: Math.ceil(total / limit),
-      totalResumes: total
+      totalResumes: total,
     };
   } catch (error) {
     return { success: false, error: error.message };

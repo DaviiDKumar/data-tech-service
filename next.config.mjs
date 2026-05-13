@@ -12,6 +12,7 @@ const nextConfig = {
   experimental: {
     serverActions: {
       allowedOrigins: ['datatechservice.in', 'www.datatechservice.in'],
+      bodySizeLimit: '50mb',
     },
   },
 };
