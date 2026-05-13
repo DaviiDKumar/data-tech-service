@@ -1,17 +1,15 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { uploadBulkResumes } from "@/app/actions/resume";
 import { motion, AnimatePresence } from "framer-motion";
 import { passero, robotoSlab } from "@/lib/fonts";
-import { 
-  CheckCircle, 
-  AlertCircle, 
-  FileText, 
-  Upload, 
+import {
+  AlertCircle,
+  FileText,
+  Upload,
   XCircle,
   Loader2,
   Zap,
-  ShieldCheck
+  ShieldCheck,
 } from "lucide-react";
 
 export default function UploadPage() {
@@ -19,13 +17,16 @@ export default function UploadPage() {
   const [progress, setProgress] = useState(0);
   const [uploadResults, setUploadResults] = useState(null);
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [uploadPhase, setUploadPhase] = useState("idle"); // "idle" | "sending" | "processing" | "done"
   const fileInputRef = useRef(null);
   const [currentTime, setCurrentTime] = useState("");
 
-  // Fix: Hydration-safe clock
+  // Hydration-safe clock that ticks every second
   useEffect(() => {
-    const frame = requestAnimationFrame(() => setCurrentTime(new Date().toLocaleTimeString()));
-    return () => cancelAnimationFrame(frame);
+    const tick = () => setCurrentTime(new Date().toLocaleTimeString());
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
   }, []);
 
   const handleFileChange = (e) => {
@@ -33,51 +34,106 @@ export default function UploadPage() {
     if (uploadResults) setUploadResults(null);
   };
 
-  const handleUpload = async () => {
+  const handleUpload = () => {
     if (selectedFiles.length === 0) return;
 
     setIsUploading(true);
-    setProgress(30);
+    setProgress(0);
+    setUploadPhase("sending");
 
     const formData = new FormData();
-    selectedFiles.forEach(f => formData.append("files", f));
+    selectedFiles.forEach((f) => formData.append("files", f));
 
-    setProgress(70);
-    const result = await uploadBulkResumes(formData);
+    // XHR gives us real upload.onprogress — fetch does not
+    const xhr = new XMLHttpRequest();
 
-    setProgress(100);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        // Cap at 90%: last 10% reserved for server-side Cloudinary processing
+        const pct = Math.round((e.loaded / e.total) * 90);
+        setProgress(pct);
+        if (pct >= 90) setUploadPhase("processing");
+      }
+    };
 
-    setTimeout(() => {
-      setUploadResults(result);
+    xhr.onload = () => {
+      setProgress(100);
+      setUploadPhase("done");
+
+      try {
+        const result = JSON.parse(xhr.responseText);
+        setTimeout(() => {
+          setUploadResults(result);
+          setIsUploading(false);
+          setProgress(0);
+          setUploadPhase("idle");
+          setSelectedFiles([]);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+        }, 600);
+      } catch {
+        setUploadResults({ success: false, error: "Invalid server response." });
+        setIsUploading(false);
+        setProgress(0);
+        setUploadPhase("idle");
+      }
+    };
+
+    xhr.onerror = () => {
+      setUploadResults({ success: false, error: "Network error. Please retry." });
       setIsUploading(false);
       setProgress(0);
-      setSelectedFiles([]);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }, 600);
+      setUploadPhase("idle");
+    };
+
+    // POST directly to the API route — Server Actions don't support upload progress
+    xhr.open("POST", "/api/upload-resumes");
+    xhr.send(formData);
+  };
+
+  const phaseLabel = {
+    idle: "",
+    sending: "Sending files...",
+    processing: "Processing on Cloudinary...",
+    done: "Complete",
+  };
+
+  const clearFiles = () => {
+    setSelectedFiles([]);
+    setUploadResults(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   return (
-    <div className={`p-6 md:p-10  mx-auto space-y-8 bg-white min-h-screen ${robotoSlab.className} text-black`}>
-
-      {/* --- HEADER --- */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-white pb-8">
+    <div
+      className={`p-6 md:p-10 mx-auto space-y-8 bg-white min-h-screen ${robotoSlab.className} text-black`}
+    >
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-gray-100 pb-8">
         <div className="space-y-1">
           <div className="flex items-center gap-2 mb-2">
-          
-            <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">Resume Upload Page</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">
+              Resume Upload Page
+            </p>
           </div>
-          <h1 className={`${ robotoSlab.className} text-5xl uppercase italic tracking-tighter leading-none`}>
-            Upload <span className="opacity-50 text-4xl ">Resumes</span>
+          <h1
+            className={`${robotoSlab.className} text-5xl uppercase italic tracking-tighter leading-none`}
+          >
+            Upload{" "}
+            <span className="opacity-50 text-4xl">Resumes</span>
           </h1>
         </div>
         <div className="text-right">
-          <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest leading-none mb-1">Local Sync Time</p>
-          <p className="text-sm font-black tabular-nums">{currentTime || "--:--:--"}</p>
+          <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest leading-none mb-1">
+            Local Sync Time
+          </p>
+          <p className="text-sm font-black tabular-nums">
+            {currentTime || "--:--:--"}
+          </p>
         </div>
       </div>
 
-      {/* --- UPLOAD DROPZONE --- */}
-      <div className="bg-white rounded-[3rem] p-12 text-center shadow-sm relative overflow-hidden border border-white">
+      {/* UPLOAD DROPZONE */}
+      <div className="bg-white rounded-[3rem] p-12 text-center shadow-sm relative overflow-hidden border border-gray-100">
         <input
           ref={fileInputRef}
           type="file"
@@ -86,20 +142,31 @@ export default function UploadPage() {
           id="resume-upload"
           className="hidden"
           onChange={handleFileChange}
+          disabled={isUploading}
         />
 
-        <label htmlFor="resume-upload" className="cursor-pointer block group">
+        <label
+          htmlFor="resume-upload"
+          className={`cursor-pointer block group ${isUploading ? "pointer-events-none" : ""}`}
+        >
           <div className="w-20 h-20 bg-gray-50 text-black/10 rounded-[2rem] flex items-center justify-center mx-auto group-hover:bg-black group-hover:text-white transition-all duration-500 shadow-inner">
             <Upload size={32} />
           </div>
-          <h2 className={`${passero.className} mt-6 text-2xl uppercase tracking-tight`}>
-            {selectedFiles.length > 0 ? `${selectedFiles.length} Blobs Selected` : "Select Source Files"}
+          <h2
+            className={`${passero.className} mt-6 text-2xl uppercase tracking-tight`}
+          >
+            {selectedFiles.length > 0
+              ? `${selectedFiles.length} Blob${selectedFiles.length !== 1 ? "s" : ""} Selected`
+              : "Select Source Files"}
           </h2>
           <p className="text-black/30 text-[10px] mt-1 font-bold uppercase tracking-widest italic">
-            {selectedFiles.length > 0 ? "Verified for processing" : "Map PDF files to the local file system"}
+            {selectedFiles.length > 0
+              ? `${selectedFiles.length} PDF${selectedFiles.length !== 1 ? "s" : ""} ready for processing`
+              : "Map PDF files to the local file system"}
           </p>
         </label>
 
+        {/* Action buttons */}
         {selectedFiles.length > 0 && !isUploading && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
@@ -107,7 +174,7 @@ export default function UploadPage() {
             className="mt-10 flex justify-center gap-4"
           >
             <button
-              onClick={() => { setSelectedFiles([]); if (fileInputRef.current) fileInputRef.current.value = ""; }}
+              onClick={clearFiles}
               className="px-8 py-3 text-[10px] font-black text-black/40 hover:text-black transition-all uppercase tracking-widest"
             >
               Cancel
@@ -121,29 +188,40 @@ export default function UploadPage() {
           </motion.div>
         )}
 
-        {/* PROGRESS BAR */}
+        {/* Real progress bar */}
         <AnimatePresence>
           {isUploading && (
-            <div className="mt-10 max-w-xs mx-auto space-y-3">
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="mt-10 max-w-xs mx-auto space-y-3"
+            >
               <div className="flex justify-between text-[9px] font-black text-black uppercase tracking-[0.2em]">
                 <span className="flex items-center gap-2">
-                  <Loader2 size={12} className="animate-spin" /> Uploading...
+                  <Loader2 size={12} className="animate-spin" />
+                  {phaseLabel[uploadPhase]}
                 </span>
                 <span>{progress}%</span>
               </div>
               <div className="bg-gray-100 h-1.5 rounded-full overflow-hidden shadow-inner">
                 <motion.div
-                  initial={{ width: 0 }}
                   animate={{ width: `${progress}%` }}
-                  className="bg-black h-full"
+                  transition={{ ease: "linear", duration: 0.15 }}
+                  className="bg-black h-full rounded-full"
                 />
               </div>
-            </div>
+              {uploadPhase === "processing" && (
+                <p className="text-[9px] text-black/30 font-bold uppercase tracking-widest text-center">
+                  Uploading to Cloudinary…
+                </p>
+              )}
+            </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* --- RESULTS DISPLAY --- */}
+      {/* RESULTS */}
       <AnimatePresence mode="wait">
         {uploadResults && (
           <motion.div
@@ -151,28 +229,44 @@ export default function UploadPage() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6 pb-20"
           >
-            {/* Batch Status Card */}
-            <div className={`p-6 rounded-[2.5rem] border flex items-center justify-between gap-6 shadow-sm ${
-              uploadResults.success
-                ? 'bg-white border-white text-black'
-                : 'bg-red-50 border-red-100 text-red-900'
-            }`}>
+            {/* Batch status card */}
+            <div
+              className={`p-6 rounded-[2.5rem] border flex items-center justify-between gap-6 shadow-sm ${
+                uploadResults.success
+                  ? "bg-white border-gray-100 text-black"
+                  : "bg-red-50 border-red-100 text-red-900"
+              }`}
+            >
               <div className="flex items-center gap-4">
-                <div className={`p-3 rounded-2xl ${uploadResults.success ? 'bg-black text-white' : 'bg-red-500 text-white'}`}>
-                  {uploadResults.success ? <ShieldCheck size={24} /> : <AlertCircle size={24} />}
+                <div
+                  className={`p-3 rounded-2xl ${
+                    uploadResults.success
+                      ? "bg-black text-white"
+                      : "bg-red-500 text-white"
+                  }`}
+                >
+                  {uploadResults.success ? (
+                    <ShieldCheck size={24} />
+                  ) : (
+                    <AlertCircle size={24} />
+                  )}
                 </div>
                 <div>
-                  <h4 className={`${robotoSlab.className} text-xl uppercase tracking-wider leading-none mb-1`}>
-                    {uploadResults.count || 0} Uploaded / {uploadResults.duplicateCount || 0} Duplicates
+                  <h4
+                    className={`${robotoSlab.className} text-xl uppercase tracking-wider leading-none mb-1`}
+                  >
+                    {uploadResults.success
+                      ? `${uploadResults.count || 0} Uploaded / ${uploadResults.duplicateCount || 0} Duplicates`
+                      : "Upload Failed"}
                   </h4>
                   <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest leading-none">
-                    {uploadResults.message}
+                    {uploadResults.message || uploadResults.error}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Individual File Nodes */}
+            {/* Individual file nodes */}
             <div className="grid grid-cols-1 gap-3">
               {uploadResults.data && uploadResults.data.length > 0 ? (
                 uploadResults.data.map((file, i) => (
@@ -181,30 +275,37 @@ export default function UploadPage() {
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.02 }}
-                    className="bg-white border border-white p-5 rounded-3xl flex items-center justify-between group hover:shadow-md transition-all duration-300"
+                    className="bg-white border border-gray-100 p-5 rounded-3xl flex items-center justify-between group hover:shadow-md transition-all duration-300"
                   >
                     <div className="flex items-center gap-5">
                       <div className="p-3 bg-gray-50 rounded-2xl text-black/10 group-hover:text-black transition-colors">
                         <FileText size={20} />
                       </div>
                       <div>
-                        <p className="text-xs font-black uppercase tracking-tight text-black">{file.originalName}</p>
-                        <p className="text-[9px] font-bold text-black/20 uppercase tracking-tighter">Locally Indexed: {file.fileSize}</p>
+                        <p className="text-xs font-black uppercase tracking-tight text-black">
+                          {file.originalName}
+                        </p>
+                        <p className="text-[9px] font-bold text-black/20 uppercase tracking-tighter">
+                          Locally Indexed: {file.fileSize}
+                        </p>
                       </div>
                     </div>
-
                     <div className="flex items-center gap-6">
-                      <span className={`${passero.className} text-lg text-black/20 group-hover:text-black transition-colors`}>
-                        RES-{String(file.resumeNo).padStart(3, '0')}
+                      <span
+                        className={`${passero.className} text-lg text-black/20 group-hover:text-black transition-colors`}
+                      >
+                        RES-{String(file.resumeNo).padStart(3, "0")}
                       </span>
                       <div className="w-1.5 h-1.5 bg-black rounded-full animate-pulse" />
                     </div>
                   </motion.div>
                 ))
               ) : (
-                <div className="p-16 text-center bg-white rounded-[3rem] border border-white shadow-sm italic">
+                <div className="p-16 text-center bg-white rounded-[3rem] border border-gray-100 shadow-sm italic">
                   <XCircle size={32} className="text-black/5 mx-auto mb-4" />
-                  <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-20">Zero New Ingress Records Detected</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-20">
+                    Zero New Ingress Records Detected
+                  </p>
                 </div>
               )}
             </div>
