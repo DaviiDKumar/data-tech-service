@@ -53,16 +53,15 @@ export async function adminReply(queryId, text) {
   revalidatePath("/admin/queries");
 }
 
-
-export async function closeTicket(queryId) {
+export async function updateTicketStatus(queryId, status) {
   await connectDB();
 
-  // 1. Update the status to 'closed'
   await Query.findByIdAndUpdate(queryId, {
-    $set: { status: "closed" }
+    $set: { status: status } // Uses the status passed from the client (e.g., 'closed')
   });
 
-  // 2. Refresh the queries pages
   revalidatePath("/admin/queries");
   revalidatePath("/user/queries");
+  
+  return { success: true }; // Return a success object for the client toast
 }

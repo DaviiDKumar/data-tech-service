@@ -182,8 +182,8 @@ function TableRow({ tier, acc, rate, isRed }) {
   return (
     <div className="flex justify-between items-center py-2.5 border-b border-white/5 group hover:bg-white/5 px-3 rounded-xl transition-all">
       <div>
-        <p className="text-[9px] font-black uppercase tracking-widest text-white/90">{tier}</p>
-        <p className="text-[8px] text-white/30 font-bold uppercase">{acc}</p>
+        <p className="text-[12px] font-bolkd  tracking-widest text-white">{tier}</p>
+        <p className="text-[10px] text-white font-bold ">{acc}</p>
       </div>
       <div className="text-right">
         <p className={`${passero.className} text-xl ${isRed ? 'text-rose-500' : 'text-violet-400'}`}>₹{rate}</p>

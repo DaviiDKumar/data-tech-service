@@ -12,43 +12,57 @@ export async function submitBankDetails(userId, bankPayload) {
   try {
     await connectDB();
 
+    // DEBUG LOG 1: Check what exactly is arriving from the frontend
+    console.log("🚀 [Incoming Payload]:", JSON.stringify(bankPayload, null, 2));
+
     if (!userId) throw new Error("User ID is missing");
 
-    // String ID ko MongoDB ObjectId mein convert karna zaroori hai
     const userObjectId = new mongoose.Types.ObjectId(userId);
 
+    // Prepare the update object
     const updateData = {
-      userId: userObjectId, // Ensure correct type
+      userId: userObjectId,
       "bankDetails.data": {
         accountHolderName: bankPayload.accountHolderName,
         accountNumber: bankPayload.accountNumber,
         ifscCode: bankPayload.ifscCode,
         bankName: bankPayload.bankName,
+
+        // DEBUG LOG 2: Monitor these specific values
+        accountType: bankPayload.accountType || 'Savings',
+        paymentMethod: bankPayload.paymentMethod || 'UPI',
+        paymentMobile: bankPayload.paymentMobile, 
       },
       "bankDetails.status": "pending",
       lastUpdated: new Date(),
     };
+
+    // DEBUG LOG 3: Check the final object being sent to MongoDB
+    console.log("📦 [Final DB Update Object]:", JSON.stringify(updateData, null, 2));
 
     const result = await Kyc.findOneAndUpdate(
       { userId: userObjectId },
       { $set: updateData },
       { 
         upsert: true, 
-        returnDocument: 'after', // Deprecation fix
+        new: true, 
         runValidators: true 
       }
     );
 
-    console.log("✅ DB Result:", result ? "Created/Updated" : "Failed");
+    // DEBUG LOG 4: See exactly what MongoDB saved
+    console.log("✅ [DB Saved Result]:", JSON.stringify(result.bankDetails.data, null, 2));
 
     revalidatePath("/user/profile");
-    return { success: true, message: "Bank details updated successfully" };
+    return { 
+      success: true, 
+      message: "Bank details submitted and are now pending verification." 
+    };
   } catch (error) {
     console.error("❌ Bank Submission Error:", error.message);
     return { success: false, error: error.message };
   }
 }
-
 
 
 
@@ -61,9 +75,10 @@ export async function submitKycWithFiles(userId, formData) {
     const addrFile = formData.get("addrFile");
 
     // Parallel upload to Cloudinary for speed
+    // If no new file is selected, these will return null
     const [idFileUrl, addrFileUrl] = await Promise.all([
-      uploadToCloudinary(idFile, userId, "id_proof"),
-      uploadToCloudinary(addrFile, userId, "address_proof")
+      idFile && idFile.size > 0 ? uploadToCloudinary(idFile, userId, "id_proof") : null,
+      addrFile && addrFile.size > 0 ? uploadToCloudinary(addrFile, userId, "address_proof") : null
     ]);
 
     const userObjectId = new mongoose.Types.ObjectId(userId);
@@ -71,31 +86,43 @@ export async function submitKycWithFiles(userId, formData) {
     const updateData = {
       userId: userObjectId,
       "documents.idProof": {
-        idType: formData.get("idType"),
+        // Enums: "aadhaar", "pan", "voter_id", "passport"
+        idType: formData.get("idType"), 
         idNumber: formData.get("idNumber"),
         fileUrl: idFileUrl || formData.get("existingIdUrl"),
       },
       "documents.addressProof": {
+        // Enums: "electricy_bill", "rent_agreement", "water_bill", "gas_bill", "other_bill"
         idType: formData.get("addressType"),
         idNumber: formData.get("addressNumber"),
         fileUrl: addrFileUrl || formData.get("existingAddrUrl"),
       },
+      // State transitions to 'pending' for admin review
       "documents.status": "pending",
       lastUpdated: new Date(),
     };
 
-    // Upsert logic: Create if new, update if exists
-    await Kyc.findOneAndUpdate(
+    // Upsert logic: Create if new node, update if existing
+    const result = await Kyc.findOneAndUpdate(
       { userId: userObjectId }, 
       { $set: updateData }, 
-      { upsert: true, runValidators: true }
+      { 
+        upsert: true, 
+        new: true, 
+        runValidators: true // Enforces enum checks
+      }
     );
 
+    console.log("✅ KYC Sync Result:", result ? "Pending Review" : "Failed");
+
     revalidatePath("/user/profile");
-    return { success: true, message: "KYC Documents securely stored in Cloudinary." };
+    return { 
+      success: true, 
+      message: "Identity and Address proof records submitted for validation." 
+    };
 
   } catch (error) {
-    console.error("KYC Submission Error:", error);
+    console.error("❌ KYC Submission Error:", error.message);
     return { success: false, error: error.message };
   }
 }

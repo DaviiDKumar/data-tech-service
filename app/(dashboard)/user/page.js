@@ -55,8 +55,8 @@ export default function UserDashboard() {
   // 2. The Final Fixed Effect
   useEffect(() => {
     // Check root first, then fallback to stats, then fallback to createdAt
-    const rawStart = user?.startDate || user?.stats?.startDate || user?.createdAt;
-    const rawEnd = user?.endDate || user?.stats?.endDate;
+    const rawStart = user?.startDate || user?.createdAt;
+    const rawEnd = user?.endDate ;
 
     if (!rawStart || !rawEnd) {
       console.warn("Timer: Waiting for valid dates...", { rawStart, rawEnd });
@@ -128,7 +128,7 @@ export default function UserDashboard() {
 
 
   return (
-    <div className={`min-h-screen pt-0 p-8 lg:p-12 lg:pt-0 ${robotoSlab.className}`}>
+    <div className={`min-h-screen pt-0 p-8 lg:p-8 lg:pt-0 ${robotoSlab.className}`}>
       <div className="max-w-6xl mx-auto space-y-12">
         <header className="h-20 flex items-center border-b-2 border-slate-300 justify-between  sticky top-0 z-40 backdrop-blur-xl">
 

@@ -49,6 +49,7 @@ async function DashboardAsyncContent({ children }) {
     endDate: fullUser.endDate || {},
     startDate: fullUser.startDate || {},
     isActive: fullUser.isActive || false,
+    loginId: fullUser.loginId || null,
     
   } : {
     id: userId || null,
@@ -57,7 +58,7 @@ async function DashboardAsyncContent({ children }) {
   };
 
 
-
+ 
 
 
 

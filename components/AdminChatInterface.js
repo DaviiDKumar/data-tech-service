@@ -1,91 +1,124 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { Send, CheckCircle, Lock, ShieldCheck, User } from "lucide-react";
-import { adminReply, closeTicket } from "@/app/actions/queries";
+import { Send, CheckCircle, Lock, ShieldCheck, User, Clock } from "lucide-react";
+import { adminReply, updateTicketStatus } from "@/app/actions/queries";
+import { toast } from "sonner";
 
 export default function AdminChatInterface({ query }) {
+  // Initializing state directly from props is safe because 'key' handles resets
   const [input, setInput] = useState("");
+  const [localMessages, setLocalMessages] = useState(query.messages);
+  const [isSending, setIsSending] = useState(false);
+  
   const scrollRef = useRef(null);
   const isClosed = query.status === "closed";
 
+  // Still use an effect for scrolling, as that is a side-effect (DOM update)
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [query.messages]);
+  }, [localMessages]);
 
   async function handleSend(e) {
     e.preventDefault();
-    if (!input.trim() || isClosed) return;
-    const msg = input;
+    if (!input.trim() || isClosed || isSending) return;
+
+    const msgText = input;
     setInput("");
-    await adminReply(query._id, msg);
+    setIsSending(true);
+
+    // Optimistic Update
+    const optimisticMsg = {
+      sender: "admin",
+      text: msgText,
+      timestamp: new Date().toISOString(),
+    };
+    
+    setLocalMessages((prev) => [...prev, optimisticMsg]);
+
+    try {
+      await adminReply(query._id, msgText);
+    } catch (error) {
+      toast.error("Failed to sync response");
+      // Optional: Remove the optimistic message on failure
+    } finally {
+      setIsSending(false);
+    }
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-white border-r border-slate-200">
-      {/* Header with Resolve Button */}
-      <div className="h-16 border-b px-6 flex justify-between items-center bg-slate-50/80 backdrop-blur-md sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-           <span className="text-[9px] bg-black text-white px-2 py-0.5 rounded font-bold uppercase tracking-tighter">
-             {query.category}
-           </span>
-           <h3 className="text-xs font-bold uppercase tracking-tight text-black">{query.subject}</h3>
-        </div>
+    <div className="flex flex-col h-full bg-white text-left font-sans">
+      {/* Dynamic Header */}
+      <div className="px-8 py-4 border-b border-slate-100 flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-10">
+     
         
-        {!isClosed ? (
-          <button 
-            onClick={() => closeTicket(query._id)}
-            className="flex items-center gap-2 text-[10px] font-bold text-green-600 border border-green-200 px-4 py-2 rounded-xl hover:bg-green-600 hover:text-white transition-all duration-300"
-          >
-            <CheckCircle size={14} /> RESOLVE TICKET
-          </button>
-        ) : (
-          <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 bg-slate-100 px-4 py-2 rounded-xl border border-slate-200">
-            <Lock size={12} /> TICKET CLOSED
+        {isClosed ? (
+          <div className="flex items-center gap-2 px-5 py-2 bg-slate-50 border border-slate-200 rounded-2xl text-[9px] font-black text-slate-400 uppercase italic">
+            <Lock size={12} /> Sync Finalized
           </div>
+        ) : (
+          <button 
+            onClick={() => updateTicketStatus(query._id, "closed")}
+            className="flex items-center gap-2 px-5 py-2 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all shadow-sm active:scale-95"
+          >
+            <CheckCircle size={14} /> Resolve Ticket
+          </button>
         )}
       </div>
 
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50/50">
-        {query.messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.sender === 'admin' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[75%] p-4 rounded-2xl shadow-sm ${
-              msg.sender === 'admin' 
-              ? 'bg-zinc-900 text-white rounded-tr-none' 
-              : 'bg-white border border-slate-200 text-black rounded-tl-none'
-            }`}>
-               <div className="flex items-center gap-1.5 mb-2 opacity-40 text-[8px] uppercase font-black tracking-widest">
-                {msg.sender === 'admin' ? <ShieldCheck size={10}/> : <User size={10}/>}
-                {msg.sender}
+      {/* Message Stream */}
+      <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-[#FBFBFC] custom-scrollbar">
+        {localMessages.map((msg, i) => {
+          const isAdmin = msg.sender === 'admin';
+          return (
+            <div key={i} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
+              <div className={`group max-w-[80%] md:max-w-[65%] space-y-2`}>
+                <div className={`flex items-center gap-2 opacity-30 text-[8px] font-black uppercase tracking-widest ${isAdmin ? 'flex-row-reverse text-right' : 'text-left'}`}>
+                  {isAdmin ? <ShieldCheck size={10} className="text-violet-600"/> : <User size={10}/>}
+                  {isAdmin ? 'Technician' : 'User Node'}
+                </div>
+                
+                <div className={`p-5 rounded-3xl shadow-sm text-sm leading-relaxed transition-all ${
+                  isAdmin 
+                  ? 'bg-slate-900 text-white rounded-tr-none' 
+                  : 'bg-white border border-slate-200 text-slate-700 rounded-tl-none'
+                }`}>
+                  {msg.text}
+                </div>
+
+                <div className={`flex items-center gap-1 opacity-20 text-[8px] font-bold ${isAdmin ? 'justify-end' : 'justify-start'}`}>
+                  <Clock size={8} />
+                  {new Date(msg.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                </div>
               </div>
-              <p className="text-sm leading-relaxed">{msg.text}</p>
-              <p suppressHydrationWarning className="text-[8px] mt-2 opacity-40 text-right">
-                {new Date(msg.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
-              </p>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div ref={scrollRef} />
       </div>
 
-      {/* Input Area (Disabled if Closed) */}
-      <div className="p-4 bg-white border-t border-slate-200">
+      {/* Action Console */}
+      <div className="p-6 bg-white border-t border-slate-100">
         {!isClosed ? (
-          <form onSubmit={handleSend} className="flex gap-2">
+          <form onSubmit={handleSend} className="relative max-w-5xl mx-auto flex gap-3">
             <input 
               value={input} 
               onChange={(e) => setInput(e.target.value)}
               placeholder="TYPE YOUR RESPONSE..."
-              className="flex-1 bg-slate-100 rounded-2xl px-5 py-4 text-xs outline-none focus:ring-1 focus:ring-black uppercase font-medium"
+              className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-xs font-bold uppercase outline-none focus:border-slate-900 transition-all placeholder:text-slate-300 shadow-inner"
+              disabled={isSending}
             />
-            <button type="submit" className="bg-black text-white p-4 rounded-2xl hover:bg-zinc-800 transition-all">
+            <button 
+              type="submit" 
+              disabled={isSending || !input.trim()}
+              className="bg-slate-900 text-white p-4 px-6 rounded-2xl hover:bg-black transition-all shadow-xl shadow-slate-200 active:scale-95 disabled:opacity-30"
+            >
               <Send size={18} />
             </button>
           </form>
         ) : (
-          <div className="py-4 text-center">
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[4px]">
-              Conversation finalized. No further replies allowed.
+          <div className="py-2 text-center">
+            <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.4em] italic">
+              Encrypted channel closed • No further input allowed
             </p>
           </div>
         )}
