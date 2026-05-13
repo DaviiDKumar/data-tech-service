@@ -143,20 +143,7 @@ export default function LoginForm() {
           </form>
 
           {/* Passero One Link */}
-          <div className="mt-12 pt-6 border-t border-slate-100">
-            <p className="text-slate-400 text-sm flex items-center gap-2">
-              {/* Standard Ubuntu text */}
-              Don&apos;t have an account?
-
-              {/* Stylized Passero link */}
-              <Link
-                href="/register"
-                className={`${passero.className} text-blue-600 text-xl hover:text-blue-700 hover:underline underline-offset-4 transition-colors tracking-wide`}
-              >
-                Create here
-              </Link>
-            </p>
-          </div>
+        
         </div>
 
         {/* Footer info */}
