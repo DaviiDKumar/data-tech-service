@@ -3,31 +3,36 @@ import styles from './loading.module.css';
 export default function Loading() {
   return (
     <div className={styles.container}>
-      {/* Top Left Brand */}
+      {/* Elegant Branding */}
       <div className={styles.brand}>
-        DataTech Services
+        DataTech<span className="font-light opacity-60">Services</span>
       </div>
 
-      <div className="flex flex-col items-center">
-        {/* Compiling Message */}
+      <div className={styles.contentBox}>
+        {/* Subtle Message */}
         <p className={styles.subtitle}>
-          Please wait while compiling resources
+          Initializing Workspace
         </p>
 
-        {/* Centered Progress Bar */}
+        {/* Minimalist Progress */}
         <div className={styles.progressTrack}>
           <div className={styles.progressBar}></div>
         </div>
 
-        {/* Status Indicators */}
+        {/* Professional Status Ticker */}
         <div className={styles.statusWrapper}>
           <div className={styles.statusList}>
-            <div className={styles.statusItem}>Welcome back</div>
-            <div className={styles.statusItem}>Setting up Workspace</div>
-            <div className={styles.statusItem}>Syncing Data</div>
-            <div className={styles.statusItem}>Redirecting</div>
+            <div className={styles.statusItem}>Verifying Identity</div>
+            <div className={styles.statusItem}>Preparing Admin Panel</div>
+            <div className={styles.statusItem}>Fetching Real-time Data</div>
+            <div className={styles.statusItem}>Finalizing Environment</div>
           </div>
         </div>
+      </div>
+      
+      {/* Optional: Simple subtle watermark at the bottom */}
+      <div className="absolute bottom-10 text-[10px] uppercase tracking-[0.3em] text-violet-300 font-bold">
+        Growthforge DTS
       </div>
     </div>
   );

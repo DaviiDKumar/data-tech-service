@@ -2,18 +2,16 @@
   "name": "dashboard-fast",
   "version": "0.1.0",
   "private": true,
- 
- "scripts": {
- "dev": "next dev",
- "build": "next build",
- "start": "next start"
- },
-
-
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
   "dependencies": {
     "@tailwindcss/postcss": "^4.3.0",
     "bcryptjs": "^3.0.3",
     "caniuse-lite": "^1.0.30001788",
+    "chart.js": "^4.5.1",
     "class-variance-authority": "^0.7.1",
     "cloudinary": "^2.9.0",
     "clsx": "^2.1.1",

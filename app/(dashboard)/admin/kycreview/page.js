@@ -1,27 +1,20 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect } from "react";
 import { getAllKycRequests, updateComplianceStatus } from "@/app/actions/admin";
-import {
-  CheckCircle2, X, ExternalLink, Loader2, Clock,
-  ShieldCheck, Landmark, FileSearch, UserCheck,
-  AlertCircle, History, Search, Eye, MoreHorizontal
-} from "lucide-react";
+import {  X, Eye,CheckCheck, Landmark, ShieldCheck, Search, Loader2, UserCheck, SquareArrowRightEnter, Undo2, CloudDownload } from "lucide-react";
+
 import { Toaster, toast } from "sonner";
+import { robotoSlab } from "@/lib/fonts";
 
 export default function KycReviewPage() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isPending, startTransition] = useTransition();
-  const [viewTab, setViewTab] = useState("pending"); // "pending" | "verified"
+  const [viewTab, setViewTab] = useState("pending");
   const [searchTerm, setSearchTerm] = useState("");
+  const [modal, setModal] = useState({ show: false, type: null, data: null, reqId: null });
 
-  // Modal State
-  const [confirmModal, setConfirmModal] = useState({ show: false, data: null });
-
-  useEffect(() => {
-    loadRequests();
-  }, []);
+  useEffect(() => { loadRequests(); }, []);
 
   async function loadRequests() {
     setLoading(true);
@@ -30,97 +23,72 @@ export default function KycReviewPage() {
     setLoading(false);
   }
 
-  // --- Logic: Filter Data based on Tab & Search ---
+  const loginId = requests.map(req => req.userId?.loginId).filter(Boolean);
+  console.log("Fetched KYC Requests for Login IDs:", loginId);
+
   const filteredData = requests.filter(req => {
     const matchesSearch = req.userId?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      req.userId?.email?.toLowerCase().includes(searchTerm.toLowerCase());
-
+      req.userId?.loginId?.toLowerCase().includes(searchTerm.toLowerCase());
     const isPending = req.documents?.status === 'pending' || req.bankDetails?.status === 'pending';
     const isVerified = req.documents?.status === 'verified' && req.bankDetails?.status === 'verified';
-
-    if (viewTab === "pending") return matchesSearch && isPending;
-    return matchesSearch && isVerified;
+    return viewTab === "pending" ? (matchesSearch && isPending) : (matchesSearch && isVerified);
   });
 
-  // --- Action Execution ---
-  const executeAction = () => {
-    const { id, type, status } = confirmModal.data;
-    startTransition(async () => {
-      const res = await updateComplianceStatus(id, type, status);
-      if (res.success) {
-        toast.success(`Record updated: ${type.toUpperCase()} is now ${status}`);
-        await loadRequests(); // Refresh data
-      } else {
-        toast.error(`Error: ${res.error}`);
-      }
-      setConfirmModal({ show: false, data: null });
-    });
+
+  const handleAction = async (status) => {
+    const { reqId, type } = modal;
+    const res = await updateComplianceStatus(reqId, type, status);
+    if (res.success) {
+      toast.success(`SYSTEM: ${type.toUpperCase()} set to ${status.toUpperCase()}`);
+      setModal({ show: false, type: null, data: null, reqId: null });
+      loadRequests();
+    } else {
+      toast.error(res.error);
+    }
   };
 
   if (loading) return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-      <Loader2 className="animate-spin text-blue-600" size={45} />
-      <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400">Booting Compliance System...</p>
+    <div className="flex h-screen items-center justify-center bg-white">
+      <Loader2 className="animate-spin text-violet-600" size={40} />
     </div>
   );
 
   return (
-    <div className="max-w-7xl mx-auto space-y-10 pb-24 p-6 relative animate-in fade-in duration-700">
-      <Toaster position="top-right" richColors closeButton />
+    <div className="max-w-7xl mx-auto p-10 bg-white min-h-screen text-black">
+      <Toaster position="top-center" richColors />
 
-      {/* --- SAAS MODAL --- */}
-      {confirmModal.show && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-4">
-          <div className="bg-white rounded-[3rem] p-10 max-w-md w-full shadow-2xl border border-white/20 scale-in-center">
-            <div className={`w-20 h-20 rounded-3xl flex items-center justify-center mb-8 mx-auto shadow-lg ${confirmModal.data.status === 'verified' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-              <AlertCircle size={40} />
-            </div>
-            <h3 className="text-2xl font-black text-slate-900 uppercase italic text-center tracking-tighter">Are you sure?</h3>
-            <p className="text-xs font-bold text-slate-500 mt-3 mb-10 text-center uppercase leading-relaxed tracking-tight">
-              You are moving this <span className="text-slate-900">{confirmModal.data.type}</span> to <span className="underline decoration-2 underline-offset-4">{confirmModal.data.status}</span>.
-              <br />This will reflect on the users dashboard instantly.
-            </p>
-            <div className="flex gap-4">
-              <button onClick={() => setConfirmModal({ show: false, data: null })} className="flex-1 py-5 rounded-2xl text-[11px] font-black uppercase border-2 border-slate-100 text-slate-400 hover:bg-slate-50 transition-all">Cancel</button>
-              <button onClick={executeAction} className="flex-1 py-5 rounded-2xl text-[11px] font-black uppercase bg-slate-900 text-white shadow-xl hover:shadow-blue-200 hover:bg-blue-600 transition-all">Proceed</button>
-            </div>
+      {/* --- INTEGRATED HEADER & CONTROL BAR --- */}
+      <div className="flex flex-col xl:flex-row justify-between items-center mb-16 gap-8 border-b border-slate-100 shadow-2xl p-8 rounded pb-10">
+        <div className="flex items-center gap-6">
+          <div className="w-22 h-22 bg-black rounded-2xl flex items-center justify-center text-white">
+            <UserCheck size={44} />
+          </div>
+          <div>
+            <h1 className={`${robotoSlab.className} text-6xl mb-2 `}>KYC <span className="text-violet-600 text-5xl"  >Review</span> </h1>
+            <p className="text-[12px] font-semibold text-black/80 ml-2">Approve and Reject KYC Requests</p>
           </div>
         </div>
-      )}
 
-      {/* --- HEADER & CONTROL BAR --- */}
-      <div className="bg-slate-900 rounded-[3.5rem] p-12 flex flex-col xl:flex-row justify-between items-center shadow-2xl border-b-[8px] border-blue-600 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-blue-600/10 via-transparent to-transparent opacity-50" />
-
-        <div className="relative z-10 space-y-2 text-center xl:text-left">
-          <h1 className="text-5xl font-black uppercase italic tracking-tighter text-white leading-none">
-            KYC <span className="text-blue-500">Vault</span>
-          </h1>
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em]">Enterprise Identity Review System</p>
-        </div>
-
-        <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 mt-8 xl:mt-0 w-full xl:w-auto">
-          {/* Search */}
-          <div className="relative w-full md:w-80">
-            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+        <div className="flex flex-col md:flex-row items-center gap-4 w-full xl:w-auto">
+          {/* Search Field */}
+          <div className="relative w-full md:w-72">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={14} />
             <input
-              type="text"
               placeholder="SEARCH USER..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-white/5 border-2 border-white/10 rounded-2xl pl-14 pr-6 py-4 text-xs font-black uppercase text-white tracking-[0.2em] outline-none focus:border-blue-500 transition-all"
+              className="w-full bg-slate-50 border border-slate-100 rounded-xl pl-12 pr-4 py-3 text-[10px] font-bold uppercase outline-none focus:border-violet-600 transition-all"
             />
           </div>
 
-          {/* Tabs */}
-          <div className="flex bg-black/40 p-1.5 rounded-2xl border border-white/10 backdrop-blur-xl">
+          {/* Toggle Buttons (Now on the Right) */}
+          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
             {["pending", "verified"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setViewTab(tab)}
-                className={`flex items-center gap-2 px-8 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewTab === tab ? 'bg-blue-600 text-white shadow-2xl' : 'text-slate-500 hover:text-white'}`}
+                className={`px-8 py-2.5 rounded-lg text-[9px] font-black uppercase tracking-[0.2em] transition-all ${viewTab === tab ? 'bg-white text-black shadow-sm border border-slate-200' : 'text-slate-400 hover:text-black'}`}
               >
-                {tab === "pending" ? <History size={14} /> : <CheckCircle2 size={14} />}
                 {tab}
               </button>
             ))}
@@ -128,125 +96,198 @@ export default function KycReviewPage() {
         </div>
       </div>
 
-      {/* --- DATA CARDS --- */}
-      <div className="grid grid-cols-1 gap-8">
+      {/* --- REFINED TABLE (Image Reference Style) --- */}
+      <div className="space-y-4">
         {filteredData.length === 0 ? (
-          <div className="bg-white border-2 border-dashed border-slate-100 rounded-[4rem] py-40 text-center">
-            <FileSearch size={100} className="mx-auto mb-6 text-slate-100" />
-            <p className="font-black uppercase italic text-sm tracking-[0.3em] text-slate-300">Vault Section Empty</p>
+          <div className="py-20 text-center border-2 border-dashed border-slate-100">
+            <p className="text-black font-black uppercase tracking-widest text-md ">No matching records found in database.</p>
           </div>
         ) : (
-          filteredData.map((req) => (
-            <div key={req._id} className="bg-white border-2 border-slate-50 rounded-[4rem] p-10 flex flex-col xl:flex-row gap-12 hover:shadow-2xl transition-all group relative overflow-hidden">
+          filteredData.map((req, index) => (
+            <div key={req._id} className="group bg-white border border-slate-200 shadow-xl rounded-md  p-6  flex flex-wrap md:flex-nowrap items-center justify-between gap-6 transition-all">
 
-              {/* Profile Sidebar */}
-              <div className="flex flex-row xl:flex-col items-center xl:items-start gap-6 min-w-[260px] xl:border-r border-slate-100 pr-0 xl:pr-12">
-                <div className="w-20 h-20 bg-slate-900 rounded-[2.2rem] flex items-center justify-center text-3xl font-black italic text-white shadow-2xl group-hover:rotate-6 transition-all duration-500">
-                  {req.userId?.name?.charAt(0)}
-                </div>
-                <div>
-                  <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tighter leading-tight">{req.userId?.name}</h3>
-                  <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">{req.userId?.email}</p>
-                  <span className="inline-block mt-3 px-3 py-1 bg-slate-100 rounded-lg text-[8px] font-black text-slate-500 uppercase tracking-widest">ID: {req._id.slice(-6)}</span>
+              <div className="flex items-center gap-8 flex-1">
+                {/* S.No with custom styling from image */}
+                <span className="text-lg font-black text-slate-900 w-6  group-hover:text-violet-600">{index + 1}</span>
+
+                <div className="flex items-center gap-5">
+                  <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-violet-600 group-hover:text-white transition-colors">
+                    <UserCheck size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-tight">{req.userId?.name}</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">ID: {req.userId?.loginId}</p>
+                  </div>
                 </div>
               </div>
 
-              {/* KYC REVIEW BLOCK */}
-              <div className={`flex-1 space-y-6 p-8 rounded-[3rem] border transition-all ${req.documents?.status === 'verified' ? 'bg-emerald-50/20 border-emerald-100' : 'bg-blue-50/20 border-blue-100'}`}>
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <ShieldCheck size={20} className={req.documents?.status === 'verified' ? 'text-emerald-500' : 'text-blue-600'} />
-                    <p className="text-[11px] font-black uppercase tracking-widest text-slate-900">Identity Documents</p>
-                  </div>
-                  <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase ${req.documents?.status === 'verified' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
-                    {req.documents?.status}
-                  </span>
-                </div>
+              {/* Action Buttons styled like 'Continue' button from image */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setModal({ show: true, type: 'kyc', data: req.documents, reqId: req._id })}
+                  className={`px-6 py-3 rounded-full text-[12px] cursor-pointer font-black uppercase tracking-widest border transition-all flex items-center gap-2 ${req.documents?.status === 'verified' ? 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-800 hover:text-white' : 'bg-white text-black border-slate-100 hover:bg-black hover:text-white'}`}
+                >
+                  <ShieldCheck size={14} /> KYC {req.documents?.status === 'verified' && <span className="text-[8px]  ">(Verified)</span>}
+                </button>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* ID Proof Button */}
-                  <div className="bg-white p-5 rounded-3xl border-2 border-slate-100 shadow-sm flex items-center justify-between group/btn">
-                    <div>
-                      <p className="text-[8px] font-black text-slate-400 uppercase">{req.documents.idProof?.idType || "ID PROOF"}</p>
-                      <p className="text-[11px] font-bold text-slate-800">{req.documents.idProof?.idNumber}</p>
-                    </div>
-                    <a
-                      href={req.documents.idProof?.fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-3 bg-slate-50 rounded-2xl text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-sm"
-                    >
-                      <Eye size={18} />
-                    </a>
-                  </div>
-                  {/* Address Proof Button */}
-                  <div className="bg-white p-5 rounded-3xl border-2 border-slate-100 shadow-sm flex items-center justify-between group/btn">
-                    <div>
-                      <p className="text-[8px] font-black text-slate-400 uppercase">Address Proof</p>
-                      <p className="text-[11px] font-bold text-slate-800">{req.documents.addressProof?.idNumber || "Not Provided"}</p>
-                    </div>
-                    <a href={req.documents.addressProof?.fileUrl} target="_blank" className="p-3 bg-slate-50 rounded-2xl text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-sm">
-                      <Eye size={18} />
-                    </a>
-                  </div>
-                </div>
+                <button
+                  onClick={() => setModal({ show: true, type: 'bank', data: req.bankDetails, reqId: req._id })}
+                  className={`px-6 py-3 rounded-full text-[12px] cursor-pointer font-black uppercase tracking-widest border transition-all flex items-center gap-2 ${req.bankDetails?.status === 'verified' ? 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-800 hover:text-white' : 'bg-white text-black border-slate-100 hover:bg-black hover:text-white'}`}
+                >
+                  <Landmark size={14} /> Bank {req.bankDetails?.status === 'verified' && <span className="text-[8px] ">(Verified)</span>}
+                </button>
 
-                <div className="flex gap-3 pt-2">
-                  <button
-                    disabled={req.documents?.status === 'verified' || isPending}
-                    onClick={() => setConfirmModal({ show: true, data: { id: req._id, type: 'kyc', status: 'verified' } })}
-                    className="flex-1 bg-emerald-500 text-white py-4 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:shadow-xl transition-all disabled:opacity-20 disabled:grayscale"
-                  >
-                    {req.documents?.status === 'verified' ? "Identity Approved" : "Approve Identity"}
-                  </button>
-                  <button
-                    onClick={() => setConfirmModal({ show: true, data: { id: req._id, type: 'kyc', status: 'rejected' } })}
-                    className="bg-rose-500 text-white px-6 rounded-[1.5rem] hover:bg-rose-600 transition-all flex items-center justify-center"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
+                <div className="h-8 w-[1px] bg-slate-100 mx-2 hidden md:block" />
+
+
               </div>
-
-              {/* BANK REVIEW BLOCK */}
-              <div className={`flex-1 space-y-6 p-8 rounded-[3rem] border transition-all ${req.bankDetails?.status === 'verified' ? 'bg-emerald-50/20 border-emerald-100' : 'bg-slate-50/50 border-slate-100'}`}>
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3 text-slate-900">
-                    <Landmark size={20} className={req.bankDetails?.status === 'verified' ? 'text-emerald-500' : 'text-slate-400'} />
-                    <p className="text-[11px] font-black uppercase tracking-widest">Payout Credentials</p>
-                  </div>
-                  <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase ${req.bankDetails?.status === 'verified' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
-                    {req.bankDetails?.status}
-                  </span>
-                </div>
-
-                <div className="bg-white p-6 rounded-3xl border-2 border-slate-50 text-[11px] font-bold text-slate-800 space-y-2 shadow-inner font-mono">
-                  <p className="flex justify-between opacity-80 uppercase text-[9px]"><span>Holder:</span> {req.bankDetails.data?.accountHolderName}</p>
-                  <p className="flex justify-between"><span>A/C:</span> {req.bankDetails.data?.accountNumber}</p>
-                  <p className="flex justify-between border-t pt-2 mt-2 opacity-60"><span>Bank:</span> {req.bankDetails.data?.bankName} ({req.bankDetails.data?.ifscCode})</p>
-                </div>
-
-                <div className="flex gap-3 pt-2">
-                  <button
-                    disabled={req.bankDetails?.status === 'verified' || isPending}
-                    onClick={() => setConfirmModal({ show: true, data: { id: req._id, type: 'bank', status: 'verified' } })}
-                    className="flex-1 bg-slate-900 text-white py-4 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:shadow-xl transition-all disabled:opacity-20 disabled:grayscale"
-                  >
-                    {req.bankDetails?.status === 'verified' ? "Payout Verified" : "Verify Bank Info"}
-                  </button>
-                  <button
-                    onClick={() => setConfirmModal({ show: true, data: { id: req._id, type: 'bank', status: 'rejected' } })}
-                    className="bg-rose-500 text-white px-6 rounded-[1.5rem] hover:bg-rose-600 transition-all flex items-center justify-center"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-              </div>
-
             </div>
           ))
         )}
       </div>
+
+      {/* --- REVIEW MODAL (IDENTICAL TO PREVIOUS LOGIC) --- */}
+      {modal.show && (
+        <div className="fixed inset-0 z-[100]  flex items-center justify-center bg-black backdrop-blur-sm p-4 animate-in fade-in duration-300">
+
+          {/* Dynamic Width: max-w-lg for Bank, max-w-6xl for KYC */}
+          <div className={`bg-white  w-full h-[85vh] shadow-2xl border-2 border-white flex overflow-hidden transition-all duration-500 ${modal.type === 'bank' ? 'max-w-lg' : 'max-w-6xl'}`}>
+
+            {/* --- LEFT PANEL: DATA & ACTIONS --- */}
+            <div className={`p-10 flex flex-col bg-white h-full ${modal.type === 'kyc' ? 'w-full md:w-[35%] border-r-4 border-black' : 'w-full'}`}>
+              <div className="flex justify-between items-center mb-10">
+                <div>
+                  <h2 className={`${robotoSlab.className} text-4xl `}>Review KYC </h2>
+                </div>
+                <button
+                  onClick={() => setModal({ show: false, type: null, data: null, reqId: null, previewUrl: null })}
+                  className="p-3 bg-white text-red-600 border-red-600 border rounded-full hover:text-white hover:bg-red-600  cursor-pointer transition-all"
+                ><Undo2 size={20} /></button>
+              </div>
+
+              {/* Data Fields Section */}
+              <div className="flex-1 space-y-4 overflow-y-auto pr-2 custom-scrollbar">
+                {modal.type === 'kyc' ? (
+                  /* Identity View with Preview Buttons */
+                  <div className="space-y-4">
+                    <div className="flex justify-between text-[14px]  pb-2">
+                      <span className="text-black">ID PROOF </span>
+                      <span className="text-black">{modal.data.idProof?.idType}</span>
+                    </div>
+                    <div className="flex justify-between text-[14px]  pb-2">
+                      <span className="text-black">ID NO </span>
+                      <span className="text-black italic">{modal.data.idProof?.idNumber}</span>
+                    </div>
+                    <button
+                      onClick={() => setModal({ ...modal, previewUrl: modal.data.idProof?.fileUrl })}
+                      className="w-full py-4 flex items-center justify-center gap-3 cursor-pointer bg-violet-50 text-violet-600 text-[10px] font-black uppercase rounded-2xl border-2 border-violet-100 transition-all hover:bg-violet-600 hover:text-white shadow-sm group"
+                    >
+                      <SquareArrowRightEnter
+                        size={18}
+                        className="transition-transform group-hover:translate-x-1"
+                      />
+                      Load ID Preview
+                    </button>
+                    <div className="h-6" />
+
+                    <div className="flex justify-between text-[14px]  pb-2">
+                      <span className="text-black">ADRSS PROOF </span>
+                      <span className="text-black">{modal.data.addressProof?.idType?.replace('_', ' ')}</span>
+                    </div>
+                    <div className="flex justify-between text-[14px]  pb-2">
+                      <span className="text-black/">ADRESS ID NO </span>
+                      <span className="text-black italic">{modal.data.addressProof?.idNumber}</span>
+                    </div>
+                    <button
+                      onClick={() => setModal({ ...modal, previewUrl: modal.data.addressProof?.fileUrl })}
+                    className="w-full py-4 flex items-center justify-center gap-3 cursor-pointer bg-violet-50 text-violet-600 text-[10px] font-black uppercase rounded-2xl border-2 border-violet-100 transition-all hover:bg-violet-600 hover:text-white shadow-sm group"
+                    >
+                      <SquareArrowRightEnter
+                        size={18}
+                        className="transition-transform group-hover:translate-x-1"
+                      />
+                      Load Address ID Preview
+                    </button>
+                  </div>
+                ) : (
+                  /* Bank View: Straight Simple List */
+                  <div className="space-y-4">
+                    {[
+                      { l: "HOLDER NAME", v: modal.data.data?.accountHolderName },
+                      { l: "ACCOUNT NO", v: modal.data.data?.accountNumber },
+                      { l: "BANK NAME", v: modal.data.data?.bankName },
+                      { l: "IFSC CODE", v: modal.data.data?.ifscCode },
+                      { l: "TYPE", v: modal.data.data?.accountType },
+                      { l: "METHOD", v: modal.data.data?.paymentMethod },
+                      { l: "UPI NO", v: modal.data.data?.paymentMobile },
+                    ].map(row => (
+                      <div key={row.l} className="flex justify-between text-[14px]  pb-2">
+                        <span className="text-black">{row.l} </span>
+                        <span className="text-black">{row.v}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+            
+
+<div className="flex gap-4 pt-8 border-t-4 border-black mt-6">
+  {/* REJECT BUTTON - Red Slide-in */}
+  <button 
+    onClick={() => handleAction('rejected')} 
+    className="group relative flex-1 py-5 overflow-hidden rounded-md cursor-pointer   bg-white text-[10px] font-black uppercase tracking-widest text-rose-600 transition-all duration-300"
+  >
+    {/* Slide-in Background Layer */}
+    <span className="absolute inset-0 top-0 left-full z-0 h-full w-full bg-rose-600 transition-all duration-500 ease-out group-hover:left-0" />
+    
+    {/* Content - Relative z-10 to stay above the slide-in bg */}
+    <div className="relative z-10 flex items-center justify-center gap-2 group-hover:text-white transition-colors duration-300">
+      <X size={16} />
+      Reject 
+    </div>
+  </button>
+
+  {/* APPROVE BUTTON - Green Slide-in */}
+  <button 
+    onClick={() => handleAction('verified')} 
+    className="group relative flex-1 py-5 overflow-hidden rounded-md cursor-pointer  bg-white text-[10px] font-black uppercase tracking-widest text-emerald-600 transition-all duration-300 shadow-xl shadow-emerald-50"
+  >
+    {/* Slide-in Background Layer */}
+    <span className="absolute inset-0 top-0 left-full z-0 h-full w-full bg-emerald-600 transition-all duration-500 ease-out group-hover:left-0" />
+    
+    {/* Content */}
+    <div className="relative z-10 flex items-center justify-center gap-2 group-hover:text-white transition-colors duration-300">
+      <CheckCheck size={16} />
+      Approve
+    </div>
+  </button>
+</div>
+            </div>
+
+            {/* --- RIGHT PANEL: PREVIEW (Only for KYC) --- */}
+            {modal.type === 'kyc' && (
+              <div className="hidden md:flex flex-1 bg-black relative">
+                {modal.previewUrl ? (
+                  <iframe
+                    src={`https://docs.google.com/gview?url=${modal.previewUrl}&embedded=true`}
+                    className="w-full h-full border-none bg-white"
+                    title="Viewer"
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center p-20 text-center space-y-6">
+                    <div className="w-20 h-20 bg-white/5 flex items-center justify-center border-2 border-white/10 animate-pulse">
+                      <CloudDownload size={30} className="text-white/20" />
+                    </div>
+                    <p className="text-white font-black uppercase italic tracking-[0.4em] text-[10px]">Files Will be Displayed Here</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

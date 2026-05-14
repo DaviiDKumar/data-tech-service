@@ -1,8 +1,8 @@
-/* app/loading.module.css */
 .container {
   position: fixed;
   inset: 0;
-  background-color: #000000;
+  /* Premium Soft White background with a subtle violet tint */
+  background: radial-gradient(circle at center, #ffffff 0%, #f5f3ff 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -14,59 +14,71 @@
   position: absolute;
   top: 40px;
   left: 40px;
-  color: #ffffff;
-  font-weight: 800;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  font-size: 14px;
-  
+  /* Using your deep brand color */
+  color: #7c3aed; /* violet-600 */
+  font-family: var(--font-roboto-slab), serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-size: 18px;
+}
+
+.contentBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(10px);
+  border-radius: 32px;
+  border: 1px solid rgba(124, 58, 237, 0.1);
 }
 
 .subtitle {
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 10px;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 3px;
-  margin-bottom: 24px;
+  letter-spacing: 0.15em;
+  margin-bottom: 32px;
   text-align: center;
 }
 
 .progressTrack {
-  width: 300px;
-  height: 2px;
-  background-color: rgba(255, 255, 255, 0.1);
+  width: 240px;
+  height: 4px;
+  background-color: #ede9fe; /* violet-100 */
+  border-radius: 10px;
   overflow: hidden;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .progressBar {
   height: 100%;
-  background-color: #ffffff;
+  background: linear-gradient(90deg, #7c3aed, #a78bfa);
   width: 0%;
-  animation: fillBar 5s linear forwards;
+  border-radius: 10px;
+  animation: fillBar 4s cubic-bezier(0.65, 0, 0.35, 1) forwards;
 }
 
 .statusWrapper {
-  height: 20px;
+  height: 24px;
   overflow: hidden;
 }
 
 .statusList {
   display: flex;
   flex-direction: column;
-  animation: scrollStatus 5s steps(4) forwards;
+  animation: scrollStatus 4s steps(4) forwards;
 }
 
 .statusItem {
-  height: 20px;
-  color: #ffffff;
-  font-family: monospace;
-  font-size: 11px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
+  height: 24px;
+  color: #4c1d95; /* deep violet */
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.01em;
   text-align: center;
-  opacity: 0.8;
 }
 
 @keyframes fillBar { to { width: 100%; } }
-@keyframes scrollStatus { to { transform: translateY(-80px); } }
+@keyframes scrollStatus { to { transform: translateY(-96px); } }
