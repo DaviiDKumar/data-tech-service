@@ -118,6 +118,7 @@ function WorkspaceContent() {
 
     const handleSubmit = async () => {
         if (isReadOnly || globalError || isExpired) return;
+        if (!isFormComplete()) { alert("⚠️ All fields must be filled."); return; }
         if (!window.confirm("Submit this resume as final?")) return;
         setIsActionLoading(true);
         try {
@@ -259,7 +260,7 @@ function WorkspaceContent() {
 
                 {/* LEFT: PDF VIEWER */}
                 <section className="w-1/2 h-full flex flex-col border-r-2 bg-white  overflow-hidden">
-                    
+
 
                     {/* --- MAIN VIEWER CONTAINER --- */}
                     <div className="flex-1 bg-zinc-200 p-4 relative overflow-hidden">
