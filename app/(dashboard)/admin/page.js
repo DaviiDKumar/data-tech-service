@@ -3,40 +3,46 @@
 import React, { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { useUserStore } from "@/store/useUserStore";
+import { useAdminStore } from "@/store/useAdminStore";
 import { robotoSlab, ubuntu } from "@/lib/fonts";
 import { fetchAdminLiveStats } from "@/app/actions/admin";
 import Chart from "chart.js/auto";
 import {
   UploadCloud, Users, FileText,
   ArrowUpRight, Activity, CalendarClock, MessageCircleQuestionMark, CheckCheck, FileChartLine, SquareCheckBig, SquareUser,
-  Database, Loader2, TrendingUp, FileClock, ChevronRight
+  Database, Loader2, TrendingUp, FileClock, RefreshCw,
 } from 'lucide-react';
 
 export default function AdminPage() {
   const { user } = useUserStore();
-  const [adminStats, setAdminStats] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { adminStats: cachedStats, setAdminStats } = useAdminStore();
+
+  const [adminStats, setLocalStats] = useState(cachedStats);
+  const [refreshing, setRefreshing] = useState(false);
   const [currentTime, setCurrentTime] = useState("");
 
-  useEffect(() => {
-    async function getStats() {
-      try {
-        const res = await fetchAdminLiveStats();
-        if (res.success) setAdminStats(res);
-      } catch (error) {
-        console.error("❌ Dashboard Sync Error:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    getStats();
-  }, []);
-
+  // Clock ticker
   useEffect(() => {
     const tick = () => setCurrentTime(new Date().toLocaleTimeString());
+    tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      const res = await fetchAdminLiveStats();
+      if (res.success) {
+        setLocalStats(res);
+        setAdminStats(res);
+      }
+    } catch (error) {
+      console.error("❌ Dashboard Sync Error:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   const stats = useMemo(() => {
     const end = new Date("2026-05-15T00:00:00.000+00:00");
@@ -124,13 +130,19 @@ export default function AdminPage() {
     { name: 'All Queries', icon: <MessageCircleQuestionMark size={20} />, path: '/admin/queries', isBlack: false },
   ];
 
-  if (loading) {
+  // Empty state — no cache yet
+  if (!adminStats) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-white">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="animate-spin text-blue-600" size={40} />
-          <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Syncing Infrastructure</p>
-        </div>
+      <div className={`h-screen w-full flex items-center justify-center bg-white flex-col gap-6 ${ubuntu.className}`}>
+        <p className="text-slate-400 text-sm">No data yet — hit refresh to load.</p>
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 transition-colors disabled:opacity-50"
+        >
+          <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+          {refreshing ? "Loading..." : "Load Dashboard"}
+        </button>
       </div>
     );
   }
@@ -147,10 +159,25 @@ export default function AdminPage() {
         <header className="flex flex-col md:flex-row justify-between items-center bg-white p-10 rounded-xl shadow-xl border-2 border-slate-100 relative overflow-hidden">
           <div className="relative z-10 space-y-2 text-center md:text-left">
             <h1 className={`${robotoSlab.className} text-6xl uppercase italic tracking-tighter leading-none`}>
-              Admin Panel
+              Admin PaneL q
             </h1>
           </div>
-          <div className="mt-8 md:mt-0 flex items-center gap-8 bg-slate-50 p-6 rounded-[2rem]">
+          <div className="mt-8 md:mt-0 flex items-center gap-4 bg-slate-50 p-6 rounded-[2rem]">
+            {/* Refresh button */}
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              title="Refresh stats"
+              className="w-10 h-10 rounded-xl bg-white hover:bg-violet-100 border border-slate-200 flex items-center justify-center transition-colors disabled:opacity-50 shadow-sm"
+            >
+              <RefreshCw
+                size={16}
+                className={`text-violet-600 ${refreshing ? "animate-spin" : ""}`}
+              />
+            </button>
+
+            <div className="w-px h-8 bg-slate-200" />
+
             <div className="text-right">
               <p className="text-[12px] text-black tracking-widest mb-1">Network Time</p>
               <p className="text-xl font-bold tabular-nums text-violet-600">{currentTime || "--:--:--"}</p>
@@ -256,9 +283,9 @@ export default function AdminPage() {
                         <span className="text-sm font-bold text-slate-800 w-6 text-right">{stage.value ?? 0}</span>
                       </div>
                     </div>
-                    <div className="w-full bg-slate-100 rounded-2xl  h-2 overflow-hidden">
+                    <div className="w-full bg-slate-100 rounded-2xl h-2 overflow-hidden">
                       <div
-                        className={`${stage.color} h-2  transition-all duration-700`}
+                        className={`${stage.color} h-2 transition-all duration-700`}
                         style={{ width: `${pct}%` }}
                       />
                     </div>
@@ -267,7 +294,6 @@ export default function AdminPage() {
               })}
             </div>
 
-            {/* Mini donut-style total summary at bottom */}
             <div className="mt-8 pt-6 border-t border-slate-50 grid grid-cols-3 gap-4">
               {[
                 { label: "In Progress", value: stats.inProgress, color: "text-violet-600" },
@@ -306,15 +332,14 @@ export default function AdminPage() {
                   {stats.latency}
                   <span className="text-lg font-normal text-slate-400 ml-1">ms</span>
                 </p>
-                <p className="text-xs text-slate-400 mt-2">Last measured on page load</p>
+                <p className="text-xs text-slate-400 mt-2">Last measured on refresh</p>
               </div>
 
-              {/* Mini latency bar visual */}
               <div className="space-y-1.5">
                 <div className="flex justify-between text-[10px] text-slate-400 uppercase tracking-widest">
                   <span>0ms</span>
                   <span>150ms</span>
-                  <span>300ms+</span>
+                  <span>310ms+</span>
                 </div>
                 <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                   <div
@@ -344,7 +369,6 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* Circle-style usage display */}
               <div className="flex items-center gap-6">
                 <div className="relative w-20 h-20 flex-shrink-0">
                   <svg viewBox="0 0 36 36" className="w-20 h-20 -rotate-90">
@@ -403,11 +427,8 @@ export default function AdminPage() {
         </div>
 
         {/* --- 7-DAY TREND CHART --- */}
-
-
         <div className="bg-white border border-slate-100 rounded-[2.5rem] shadow-sm p-8">
 
-          {/* Chart Header */}
           <div className="flex justify-between items-start mb-8">
             <div className="flex gap-4">
               <div className="w-10 h-10 rounded-2xl bg-violet-50 flex items-center justify-center border border-violet-100">
@@ -427,7 +448,6 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* Summary Cards */}
           <div className="grid grid-cols-3 gap-4 mb-8">
             {[
               { label: "Total (7d)", value: chartTotal },
@@ -441,10 +461,9 @@ export default function AdminPage() {
             ))}
           </div>
 
-          {/* Chart Canvas */}
           {stats.chartData.length === 0 ? (
             <div className="h-48 flex items-center justify-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-              <p className="text-slate-400 text-sm italic">Syncing with DTS Analytics Cluster...</p>
+              <p className="text-slate-400 text-sm italic">Hit refresh to load chart data...</p>
             </div>
           ) : (
             <div className="relative w-full h-56 overflow-hidden">
@@ -453,7 +472,6 @@ export default function AdminPage() {
             </div>
           )}
         </div>
-
 
         {/* --- ACTION HISTORY --- */}
         <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-8">
@@ -537,4 +555,3 @@ function MetricNode({ label, value, sub, type, icon }) {
     </div>
   );
 }
-
