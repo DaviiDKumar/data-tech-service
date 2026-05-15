@@ -159,7 +159,7 @@ export default function AdminPage() {
         <header className="flex flex-col md:flex-row justify-between items-center bg-white p-10 rounded-xl shadow-xl border-2 border-slate-100 relative overflow-hidden">
           <div className="relative z-10 space-y-2 text-center md:text-left">
             <h1 className={`${robotoSlab.className} text-6xl uppercase italic tracking-tighter leading-none`}>
-              Admin PaneL
+              Admin PaneL q
             </h1>
           </div>
           <div className="mt-8 md:mt-0 flex items-center gap-4 bg-slate-50 p-6 rounded-[2rem]">
