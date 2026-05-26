@@ -3,10 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { useUserStore } from "@/store/useUserStore";
 import { passero, robotoSlab } from "@/lib/fonts";
-import { 
-  Wallet, Target, Award, PieChart, 
-  BarChart3, ShieldCheck, Clock, ArrowUpRight
-} from "lucide-react";
+import { Wallet, Target, Award, Clock, ShieldCheck } from "lucide-react";
 
 export default function UserReportPage() {
   const { user } = useUserStore();
@@ -14,12 +11,9 @@ export default function UserReportPage() {
 
   useEffect(() => {
     const tick = () => setCurrentTime(new Date().toLocaleTimeString());
-    const frame = requestAnimationFrame(tick);
+    tick();
     const timer = setInterval(tick, 1000);
-    return () => {
-      cancelAnimationFrame(frame);
-      clearInterval(timer);
-    };
+    return () => clearInterval(timer);
   }, []);
 
   const stats = useMemo(() => {
@@ -29,137 +23,161 @@ export default function UserReportPage() {
     const totalSubmitted = approved + rejected;
     const accuracy = totalSubmitted > 0 ? Math.round((approved / totalSubmitted) * 100) : 0;
 
+    // Exact match logic tracking back against your 10 custom steps
     const getTierData = (acc) => {
       if (acc < 50) return { label: "Learning", rate: 2, next: 50 };
-      if (acc < 60) return { label: "Emerging", rate: 10, next: 60 };
-      if (acc < 70) return { label: "Progressing", rate: 20, next: 70 };
-      if (acc < 80) return { label: "Expectation", rate: 40, next: 80 };
-      if (acc < 91) return { label: "Proficient", rate: 60, next: 91 };
+      if (acc >= 50 && acc < 55) return { label: "Emerging", rate: 5, next: 55 };
+      if (acc >= 55 && acc < 60) return { label: "Emerging", rate: 10, next: 60 };
+      if (acc >= 60 && acc < 65) return { label: "Progressing", rate: 15, next: 65 };
+      if (acc >= 65 && acc < 70) return { label: "Progressing", rate: 20, next: 70 };
+      if (acc >= 70 && acc < 75) return { label: "Meets Expectation", rate: 30, next: 75 };
+      if (acc >= 75 && acc < 80) return { label: "Meets Expectation", rate: 40, next: 80 };
+      if (acc >= 80 && acc < 85) return { label: "Proficient", rate: 50, next: 85 };
+      if (acc >= 85 && acc <= 90) return { label: "Proficient", rate: 60, next: 91 };
       return { label: "Master", rate: 70, next: 100 };
     };
 
-    return { approved, rejected, inProgress, totalSubmitted, accuracy, tier: getTierData(accuracy), earnings: approved * getTierData(accuracy).rate };
+    const tier = getTierData(accuracy);
+    return { 
+      approved, 
+      rejected, 
+      inProgress, 
+      totalSubmitted, 
+      accuracy, 
+      tier, 
+      earnings: approved * tier.rate 
+    };
   }, [user?.stats]);
 
   return (
-    <div className={`min-h-screen bg-[#E5E7EB] p-4 md:p-8 ${robotoSlab.className} text-[#1A1A1A] selection:bg-black selection:text-white`}>
-      <div className="max-w-5xl mx-auto space-y-6">
+    <div className={`min-h-screen bg-[#F3F4F6] p-4 md:p-6 ${robotoSlab.className} text-black`}>
+      <div className="max-w-6xl mx-auto space-y-6">
         
-        {/* --- SMART HEADER --- */}
-        <header className="flex flex-col md:flex-row justify-between items-center  backdrop-blur-md p-6 rounded-[2rem] shadow-sm border border-white/50">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-black rounded-2xl flex items-center justify-center shadow-lg transform -rotate-3">
-              <ShieldCheck className="text-white" size={24} />
+        {/* --- MINIMAL HEADER --- */}
+        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white border border-neutral-300 p-6 rounded-xl shadow-sm gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center">
+              <ShieldCheck className="text-white" size={20} />
             </div>
             <div>
-              <h1 className="text-2xl font-black tracking-tight uppercase leading-none">User Report</h1>
-              <p className="text-[10px] opacity-40 font-bold tracking-[0.3em] mt-1">User / {user?.name || 'N/A'}</p>
+              <h1 className="text-xl font-black uppercase tracking-tight">Agent Report Desk</h1>
+              <p className="text-[10px] text-neutral-400 font-mono tracking-wider mt-0.5">ID: {user?.name || 'DTS_USER'}</p>
             </div>
           </div>
-          <div className="mt-4 md:mt-0 text-center md:text-right bg-gray-100/50 px-5 py-2 rounded-2xl border border-gray-200">
-            <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Last Updated</p>
-            <p className="text-sm font-black tabular-nums">{currentTime || "00:00:00"}</p>
+          <div className="bg-neutral-100 px-3 py-1.5 rounded border border-neutral-200 font-mono text-xs text-neutral-600">
+            {currentTime || "00:00:00"}
           </div>
         </header>
 
-        {/* --- HIGH-IMPACT METRICS --- */}
+        {/* --- STAT CARDS --- */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <MetricCard label="Net Earnings" value={`₹${stats.earnings}`} sub={`Rate: ₹${stats.tier.rate}/item`} icon={<Wallet size={16}/>} />
-          <MetricCard label="Node Accuracy" value={`${stats.accuracy}%`} sub={`${stats.totalSubmitted} submissions`} invert />
-          <MetricCard label="Current Tier" value={stats.tier.label} sub={`Next: ${stats.tier.next}% Accuracy`} icon={<Award size={16}/>} />
+          <MetricCard label="Net Earnings" value={`₹${stats.earnings}`} sub={`Current Rate: ₹${stats.tier.rate}/resume`} icon={<Wallet size={16}/>} />
+          <MetricCard label="Node Accuracy" value={`${stats.accuracy}%`} sub={`${stats.totalSubmitted} total processed`} invert />
+          <MetricCard label="Assigned Tier" value={stats.tier.label} sub={`Next scale target: ${stats.tier.next}%`} icon={<Award size={16}/>} />
         </div>
 
-        {/* --- PERFORMANCE DETAILS --- */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+        {/* --- MAIN SPLIT CONTAINER --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
-          {/* Work breakdown Card */}
-          <section className="bg-white rounded-[2.5rem] p-8 shadow-sm relative overflow-hidden group">
-             <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity">
-               <PieChart size={120} />
-             </div>
-             <h3 className="text-[11px] font-black uppercase tracking-[0.25em] text-gray-400 mb-8 flex items-center gap-2">
-               Live Analytics
-             </h3>
-             <div className="space-y-6 relative z-10">
-                <DataRow label="Approved" value={stats.approved} sub="Confirmed nodes" trend="+4.2%" />
-                <DataRow label="Rejected" value={stats.rejected} sub="Accuracy failure" isRed />
-                <div className="p-4 bg-gray-50 rounded-3xl border border-gray-100">
-                  <DataRow label="In-Progress" value={stats.inProgress} sub="Active work sessions" isGray icon={<Clock size={12}/>} />
-                </div>
-                <div className="pt-6 border-t border-gray-100 flex justify-between items-center">
-                   <p className="text-[10px] font-black uppercase tracking-widest ">Total </p>
-                   <span className={`${passero.className} text-4xl`}>{stats.totalSubmitted}</span>
-                </div>
-             </div>
-          </section>
+          {/* LEFT SIDE: LIVE ANALYTICS SUMMARY */}
+          <div className="lg:col-span-5 bg-white border border-neutral-300 rounded-xl p-6 shadow-sm space-y-5">
+            <h3 className="text-xs font-black uppercase tracking-wider text-neutral-400">📊 Production Summary</h3>
+            
+            <div className="space-y-4">
+              <DataRow label="Approved Resumes" value={stats.approved} sub="Accurate verified nodes" />
+              <hr className="border-neutral-200" />
+              <DataRow label="Rejected Resumes" value={stats.rejected} sub="Validation match failures" isRed />
+              <hr className="border-neutral-200" />
+              <DataRow label="In-Progress Status" value={stats.inProgress} sub="Active processing sessions" isGray icon={<Clock size={12}/>} />
+              
+              <div className="pt-4 border-t border-neutral-300 flex justify-between items-center">
+                <span className="text-xs font-black uppercase text-neutral-500">Gross Processed</span>
+                <span className={`${passero.className} text-4xl`}>{stats.totalSubmitted}</span>
+              </div>
+            </div>
 
-          {/* Blueprint Card */}
-          <section className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-gray-300/20">
-             <div className="flex justify-between items-center mb-8">
-               <h3 className="text-[11px] font-black uppercase tracking-[0.25em] text-gray-400">Payout Blueprint</h3>
-               <BarChart3 size={16} className="text-gray-300" />
-             </div>
-             <div className="space-y-1.5">
-                <TierItem range="91-100%" label="Master" rate="₹70" active={stats.accuracy >= 91} />
-                <TierItem range="80-90%" label="Proficient" rate="₹50-60" active={stats.accuracy >= 80 && stats.accuracy < 91} />
-                <TierItem range="70-80%" label="Expected" rate="₹30-40" active={stats.accuracy >= 70 && stats.accuracy < 80} />
-                <TierItem range="60-70%" label="Progressive" rate="₹15-20" active={stats.accuracy >= 60 && stats.accuracy < 70} />
-                <TierItem range="< 50%" label="Learning" rate="₹2" active={stats.accuracy < 50 && stats.totalSubmitted > 0} />
-             </div>
-             <div className="mt-8 flex items-center gap-3 p-4 bg-black text-white rounded-2xl transition-transform hover:scale-[1.02] cursor-default">
-               <ArrowUpRight size={16} className="text-gray-400" />
-               <p className="text-[9px] font-bold uppercase tracking-widest">Accuracy threshold affects lifetime node ROI</p>
-             </div>
-          </section>
+            {/* POLICY DISCLOSURE NOTATIONS */}
+            <div className="p-4 bg-neutral-50 rounded-lg border border-neutral-200 space-y-2 text-[11px] text-neutral-500 leading-relaxed font-sans">
+              <p>⚠️ <strong>Payout Notice:</strong> Payout rates are calculated per resume. Earnings accumulate exclusively from accurate, approved submissions.</p>
+              <p>📉 <strong>Disqualification Guard:</strong> Even if overall session quality falls below 50% accuracy, DataSort guarantees a minimum safety baseline rate of <strong>INR 2/-</strong> for every single verified accurate record.</p>
+              <p>💰 <strong>Withdrawal Threshold:</strong> The absolute minimum balance requirement to trigger an outward fund transfer payout is <strong>Rs. 1,000</strong>.</p>
+            </div>
+          </div>
+
+          {/* RIGHT SIDE: THE COMPREHENSIVE 10-TIER BLUEPRINT */}
+          <div className="lg:col-span-7 bg-white border border-neutral-300 rounded-xl p-6 shadow-sm space-y-4">
+            <div className="flex justify-between items-center pb-2 border-b border-neutral-200">
+              <span className="text-[10px] font-black text-neutral-400 uppercase tracking-wider w-24">Accuracy Matrix</span>
+              <span className="text-[10px] font-black text-neutral-400 uppercase tracking-wider text-center flex-1">Work Quality Rating</span>
+              <span className="text-[10px] font-black text-neutral-400 uppercase tracking-wider text-right w-20">Rate</span>
+            </div>
+
+            <div className="space-y-1 font-mono text-xs">
+              <TierRow range="91% - 100%" label="Master" rate="INR 70/-" active={stats.accuracy >= 91} />
+              <TierRow range="85% - 90%"  label="Proficient" rate="INR 60/-" active={stats.accuracy >= 85 && stats.accuracy <= 90} />
+              <TierRow range="80% - 85%"  label="Proficient" rate="INR 50/-" active={stats.accuracy >= 80 && stats.accuracy < 85} />
+              <TierRow range="75% - 80%"  label="Meets Expectation" rate="INR 40/-" active={stats.accuracy >= 75 && stats.accuracy < 80} />
+              <TierRow range="70% - 75%"  label="Meets Expectation" rate="INR 30/-" active={stats.accuracy >= 70 && stats.accuracy < 75} />
+              <TierRow range="65% - 70%"  label="Progressing" rate="INR 20/-" active={stats.accuracy >= 65 && stats.accuracy < 70} />
+              <TierRow range="60% - 65%"  label="Progressing" rate="INR 15/-" active={stats.accuracy >= 60 && stats.accuracy < 65} />
+              <TierRow range="55% - 60%"  label="Emerging" rate="INR 10/-" active={stats.accuracy >= 55 && stats.accuracy < 60} />
+              <TierRow range="50% - 55%"  label="Emerging" rate="INR 5/-" active={stats.accuracy >= 50 && stats.accuracy < 55} />
+              <TierRow range="Below 50%"  label="Learning" rate="INR 2/-" active={stats.accuracy < 50 && stats.totalSubmitted > 0} />
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
   );
 }
 
-/* --- UI COMPONENTS --- */
+/* --- LOGICALLY ISOLATED UI COMPONENT PRIMITIVES --- */
 
 function MetricCard({ label, value, sub, icon, invert }) {
   return (
-    <div className={`p-8 rounded-[2.5rem] h-44 flex flex-col justify-between transition-all duration-500 hover:shadow-2xl hover:-translate-y-1 group ${invert ? 'bg-black text-white' : 'bg-white text-black shadow-sm'}`}>
-      <div className="flex justify-between items-start">
-        <p className="text-[10px] font-black uppercase tracking-widest opacity-40 group-hover:opacity-100 transition-opacity">{label}</p>
-        <div className="opacity-20 group-hover:opacity-100 transition-all transform group-hover:scale-110">
-          {icon || <Target size={16}/>}
-        </div>
+    <div className={`p-6 border border-neutral-300 rounded-xl h-40 flex flex-col justify-between transition-all ${
+      invert ? 'bg-black text-white' : 'bg-white text-black'
+    }`}>
+      <div className="flex justify-between items-center">
+        <span className="text-[10px] font-black uppercase tracking-wider opacity-50">{label}</span>
+        <span className={invert ? 'text-neutral-400' : 'text-neutral-500'}>{icon || <Target size={14}/>}</span>
       </div>
       <div>
-        <h2 className={`${passero.className} text-5xl leading-none tracking-tighter`}>{value}</h2>
-        <p className="text-[10px] font-bold opacity-30 group-hover:opacity-100 mt-3 uppercase tracking-widest ">{sub}</p>
+        <h2 className={`${passero.className} text-4xl leading-none`}>{value}</h2>
+        <p className="text-[10px] font-medium opacity-40 mt-2 uppercase tracking-wide">{sub}</p>
       </div>
     </div>
   );
 }
 
-function DataRow({ label, value, sub, isRed, isGray, icon, trend }) {
+function DataRow({ label, value, sub, isRed, isGray, icon }) {
   return (
     <div className="flex justify-between items-center">
-       <div>
-          <div className="flex items-center gap-2">
-            <p className="text-xs font-black uppercase tracking-tight">{label}</p>
-            {trend && <span className="text-[8px] font-black text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded-full">{trend}</span>}
-            {icon && <span className="text-gray-400 animate-pulse">{icon}</span>}
-          </div>
-          <p className="text-[9px] opacity-30 uppercase font-bold tracking-tighter">{sub}</p>
-       </div>
-       <span className={`${passero.className} text-3xl ${isRed ? 'text-red-500' : isGray ? 'text-gray-400' : 'text-black'}`}>
-         {value}
-       </span>
+      <div>
+        <div className="flex items-center gap-1.5">
+          <p className="text-xs font-black uppercase tracking-tight">{label}</p>
+          {icon && <span className="text-neutral-400">{icon}</span>}
+        </div>
+        <p className="text-[10px] text-neutral-400 font-sans">{sub}</p>
+      </div>
+      <span className={`${passero.className} text-3xl ${isRed ? 'text-red-500' : isGray ? 'text-neutral-400' : 'text-black'}`}>
+        {value}
+      </span>
     </div>
   );
 }
 
-function TierItem({ range, label, rate, active }) {
+function TierRow({ range, label, rate, active }) {
   return (
-    <div className={`flex justify-between items-center px-5 py-2.5 rounded-2xl transition-all border ${active ? 'bg-black text-white border-black shadow-xl translate-x-2' : 'bg-white text-gray-400 border-gray-50'}`}>
-      <span className="text-[9px] font-black w-14 tabular-nums">{range}</span>
-      <span className="text-[10px] font-black uppercase tracking-[0.1em] text-center flex-1 ">{label}</span>
-      <span className={`${passero.className} text-lg w-12 text-right`}>{rate}</span>
+    <div className={`flex justify-between items-center px-3 py-2 rounded border ${
+      active 
+        ? 'bg-black text-white border-black font-bold scale-[1.01] shadow-sm' 
+        : 'bg-neutral-50 text-neutral-500 border-neutral-200 opacity-80'
+    }`}>
+      <span className="w-24 text-left font-mono text-[11px]">{range}</span>
+      <span className="text-center flex-1 text-[11px] uppercase tracking-wide">{label}</span>
+      <span className="w-20 text-right font-mono text-[11px] font-bold">{rate}</span>
     </div>
   );
 }

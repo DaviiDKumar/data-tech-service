@@ -13,9 +13,23 @@ import { passero } from "@/lib/fonts";
 import {
     ArrowLeft, CheckCircle, Loader2,
     FileText, Database, User,
-    GraduationCap, Briefcase, MapPin, Lock, ArrowUpRight, CloudCheck, Maximize2
+    GraduationCap, Briefcase, MapPin, Lock, ArrowUpRight, CloudCheck
 } from "lucide-react";
 import Link from "next/link";
+
+// ── FIX 1: Dynamically import the entire PDF viewer to prevent SSR
+//    from touching browser-only APIs like DOMMatrix inside pdfjs.
+const PdfViewer = dynamic(() => import('./PdfViewer'), {
+    ssr: false,
+    loading: () => (
+        <div className="w-full h-full flex flex-col items-center justify-center gap-4 bg-white">
+            <Loader2 className="animate-spin text-zinc-300" size={28} />
+            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-300">
+                Loading Document...
+            </span>
+        </div>
+    ),
+});
 
 function WorkspaceContent() {
     const { id } = useParams();
@@ -118,7 +132,7 @@ function WorkspaceContent() {
 
     const handleSubmit = async () => {
         if (isReadOnly || globalError || isExpired) return;
-        if (!isFormComplete()) { alert("⚠️ All fields must be filled."); return; }
+        // if (!isFormComplete()) { alert("⚠️ All fields must be filled."); return; }
         if (!window.confirm("Submit this resume as final?")) return;
         setIsActionLoading(true);
         try {
@@ -138,7 +152,7 @@ function WorkspaceContent() {
 
     const handleHoldSave = async () => {
         if (isReadOnly || globalError || isExpired) return;
-        if (!isFormComplete()) { alert("⚠️ All fields must be filled."); return; }
+        // if (!isFormComplete()) { alert("⚠️ All fields must be filled."); return; }
         setIsActionLoading(true);
         try {
             const res = await holdAndSaveResume(id, userId, formData);
@@ -191,7 +205,7 @@ function WorkspaceContent() {
     );
 
     return (
-        <div className="h-screen flex flex-col bg-white overflow-hidden font-sans select-none">
+        <div className="h-screen flex flex-col bg-white overflow-hidden font-sans">
 
             {/* ── HEADER ── */}
             <header className="shrink-0 h-24 border-b border-slate-500 px-6 flex items-center justify-between bg-white z-50">
@@ -204,15 +218,15 @@ function WorkspaceContent() {
                     </Link>
                     <div className="w-px h-12 bg-black" />
                     <div className="flex flex-col gap-2">
-                        <h2 className="text-[14px] font-black  text-black flex items-center gap-2">
+                        <h2 className="text-[14px] font-black text-black flex items-center gap-2">
                             <FileText size={14} />
                             <span className="max-w-xs">{resume?.originalName || "Untitled Resume"}</span>
                         </h2>
                         {!isReadOnly && (
                             <span className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-2 ${saveStatus === 'syncing' ? 'text-zinc-400' : 'text-emerald-600'}`}>
                                 {saveStatus === 'syncing'
-                                    ? <><Loader2 size={14} className="animate-spin " /> Syncing...</>
-                                    : <><CheckCircle size={14} />  Data Synced</>}
+                                    ? <><Loader2 size={14} className="animate-spin" /> Syncing...</>
+                                    : <><CheckCircle size={14} /> Data Synced</>}
                             </span>
                         )}
                     </div>
@@ -220,7 +234,6 @@ function WorkspaceContent() {
 
                 {!isReadOnly && (
                     <div className="flex items-center gap-4">
-                        {/* --- HOLD & SAVE BUTTON (Violet Theme) --- */}
                         <button
                             onClick={handleHoldSave}
                             disabled={isActionLoading}
@@ -236,7 +249,6 @@ function WorkspaceContent() {
                             )}
                         </button>
 
-                        {/* --- SUBMIT FINAL BUTTON (Green Theme) --- */}
                         <button
                             onClick={handleSubmit}
                             disabled={isActionLoading}
@@ -259,43 +271,26 @@ function WorkspaceContent() {
             <main className="flex flex-1 min-h-0 overflow-hidden">
 
                 {/* LEFT: PDF VIEWER */}
-                <section className="w-1/2 h-full flex flex-col border-r-2 bg-white  overflow-hidden">
-
-
-                    {/* --- MAIN VIEWER CONTAINER --- */}
+                <section className="w-1/2 h-full flex flex-col border-r-2 bg-white overflow-hidden">
                     <div className="flex-1 bg-zinc-200 p-4 relative overflow-hidden">
-                        {/* This container acts as the "Desk" */}
                         <div className="w-full h-full bg-white rounded-2xl border-2 border-black shadow-[10px_10px_0px_0px_rgba(0,0,0,0.05)] relative overflow-hidden">
-
                             {resume?.fileUrl ? (
-                                <div className="w-full h-full relative">
-                                    {/* VIOLET OVERLAY HACK: 
-                        This white frame sits ABOVE the iframe to hide the black edges 
-                        and give it a clean "Paper" look.
-                    */}
-                                    <div className="absolute inset-0 pointer-events-none border-[16px] border-white z-10" />
-
-                                    <iframe
-                                        src={`https://docs.google.com/viewer?url=${encodeURIComponent(resume.fileUrl)}&embedded=true`}
-                                        className="w-full h-full relative z-0 bg-white"
-                                        style={{ border: 'none' }}
-                                        title="Resume Preview"
-                                    />
-                                </div>
+                                // ── FIX 1 (cont): Use the dynamically imported component here.
+                                //    All pdfjs code lives inside PdfViewer.jsx and never runs on the server.
+                                <PdfViewer fileUrl={resume.fileUrl} />
                             ) : (
                                 <div className="w-full h-full flex flex-col items-center justify-center gap-4 bg-white">
                                     <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center border-2 border-dashed border-slate-200">
                                         <FileText size={24} className="text-slate-300" />
                                     </div>
-                                    <div className="text-center">
-                                        <span className="block text-[10px] font-black uppercase tracking-[0.3em] text-slate-300 italic">Awaiting Document...</span>
-                                    </div>
+                                    <span className="block text-[10px] font-black uppercase tracking-[0.3em] text-slate-300 italic">
+                                        Awaiting Document...
+                                    </span>
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* --- FOOTER STATUS --- */}
                     <div className="px-6 py-3 bg-white border-t-2 border-slate-100 flex justify-between items-center">
                         <div className="flex items-center gap-2">
                             <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
@@ -309,7 +304,6 @@ function WorkspaceContent() {
                 <section className={`w-1/2 h-full overflow-y-auto bg-white p-10 scroll-smooth ${isReadOnly ? 'bg-zinc-50' : ''}`}>
                     <div className="max-w-2xl mx-auto space-y-14 pb-24">
 
-                        {/* Page header */}
                         <header className="space-y-3">
                             <div className="inline-flex items-center gap-2 px-3 py-1 bg-black text-white rounded-md">
                                 <Database size={12} />
@@ -431,87 +425,26 @@ function Input({ label, name, value, onChange, type = "text", disabled = false }
     );
 }
 
-export default dynamic(() => Promise.resolve(WorkspaceContent), { ssr: false });
-
-
-
 function DobInput({ label, name, value, onChange, disabled = false }) {
-    // value is stored as "YYYY-MM-DD" or "DD-MM-YYYY" — we'll use "DD/MM/YYYY" internally
-    // Parse incoming value
-    const parse = (val) => {
-        if (!val) return { dd: "", mm: "", yy: "" };
-        // support YYYY-MM-DD (date input legacy)
-        if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
-            const [y, m, d] = val.split("-");
-            return { dd: d, mm: m, yy: y };
-        }
-        // support DD/MM/YYYY
-        const parts = val.split("/");
-        return { dd: parts[0] || "", mm: parts[1] || "", yy: parts[2] || "" };
-    };
-
-    const { dd, mm, yy } = parse(value);
-
-    const emit = (newDd, newMm, newYy) => {
-        // fires synthetic event with name and combined value
-        onChange({ target: { name, value: `${newDd}/${newMm}/${newYy}` } });
-    };
-
-    const handleDd = (e) => {
-        let v = e.target.value.replace(/\D/g, "").slice(0, 2);
-        emit(v, mm, yy);
-    };
-    const handleMm = (e) => {
-        let v = e.target.value.replace(/\D/g, "").slice(0, 2);
-        emit(dd, v, yy);
-    };
-    const handleYy = (e) => {
-        let v = e.target.value.replace(/\D/g, "").slice(0, 4);
-        emit(dd, mm, v);
-    };
-
-    const baseInput = `border-2 rounded-xl px-3 py-3.5 text-xs font-bold outline-none transition-all text-center placeholder:text-zinc-300
-        ${disabled
-            ? "bg-zinc-50 border-zinc-100 text-zinc-800 cursor-not-allowed"
-            : "bg-white border-zinc-200 focus:border-black cursor-text"}`;
-
     return (
         <div className="space-y-1.5">
             <label className="text-[12px] font-semibold tracking-widest text-zinc-800">{label}</label>
-            <div className="flex items-center gap-2">
-                <input
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={2}
-                    value={dd}
-                    onChange={handleDd}
-                    disabled={disabled}
-                    placeholder="DD"
-                    className={`${baseInput} w-16`}
-                />
-                <span className="text-zinc-300 font-black">/</span>
-                <input
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={2}
-                    value={mm}
-                    onChange={handleMm}
-                    disabled={disabled}
-                    placeholder="MM"
-                    className={`${baseInput} w-16`}
-                />
-                <span className="text-zinc-300 font-black">/</span>
-                <input
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={4}
-                    value={yy}
-                    onChange={handleYy}
-                    disabled={disabled}
-                    placeholder="YYYY"
-                    className={`${baseInput} w-24`}
-                />
-            </div>
+            <input
+                type="text"
+                name={name}
+                value={value || ""}
+                onChange={onChange}
+                disabled={disabled}
+                placeholder=""
+                maxLength={10}
+                className={`w-full border-2 rounded-xl px-5 py-3.5 text-xs font-bold outline-none transition-all placeholder:text-zinc-300
+                    ${disabled
+                        ? 'bg-zinc-50 border-zinc-100 text-zinc-800 cursor-not-allowed'
+                        : 'bg-white border-zinc-200 focus:border-black cursor-text'
+                    }`}
+            />
         </div>
     );
 }
+
+export default dynamic(() => Promise.resolve(WorkspaceContent), { ssr: false });
