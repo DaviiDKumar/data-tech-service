@@ -73,46 +73,55 @@ export default function UploadPage() {
     setIsUploading(true);
     startProgressSimulation();
 
-    const MAX_BATCH_SIZE = 8 * 1024 * 1024; // 8MB limit per payload chunk to safely bypass the 10MB limit
+    // 1. Lower this to 3.5MB to safely squeeze under Vercel's 4.5MB serverless maximum
+    const MAX_BATCH_SIZE = 3.5 * 1024 * 1024;
     let currentBatchFormData = new FormData();
     let currentBatchSize = 0;
     let accumulatedResults = { success: true, uploadedCount: 0, failedCount: 0, errors: [] };
 
     try {
-      // Loop through all selected files one by one
+      // Loop through all selected files sequentially
       for (let i = 0; i < selectedFiles.length; i++) {
         const file = selectedFiles[i];
 
-        // Add file to the current batch
+        // Safe guard: If a single file is somehow larger than 4MB by itself, skip it or log it
+        if (file.size > 4 * 1024 * 1024) {
+          accumulatedResults.errors.push(`File ${file.name} is too large for serverless limits.`);
+          continue;
+        }
+
         currentBatchFormData.append("files", file);
         currentBatchSize += file.size;
 
-        // If current batch approaches 8MB OR we reached the last file, ship it out!
+        // If current batch approaches 3.5MB OR we are processing the absolute last file, send it!
         if (currentBatchSize >= MAX_BATCH_SIZE || i === selectedFiles.length - 1) {
-          // Execute the server action for this specific batch block
+
+          // Explicitly await the server action response before moving to the next loop cycle
           const result = await uploadBulkResumes(currentBatchFormData);
-          
-          // Track and combine background responses
+
           if (result && !result.success) {
             accumulatedResults.success = false;
-            accumulatedResults.errors.push(result.error || "Partial batch upload failed.");
+            accumulatedResults.errors.push(result.error || "Batch block failed.");
           } else if (result) {
             accumulatedResults.uploadedCount += result.uploadedCount || 0;
           }
 
-          // Reset temporary batch buckets for the next cycle loop
+          // Reset memory allocations for the next smaller block
           currentBatchFormData = new FormData();
           currentBatchSize = 0;
         }
       }
 
-      // Once all batches clear perfectly, finish the progress trackers
       stopProgress();
       setProgress(100);
       setUploadPhase("done");
 
       setTimeout(() => {
-        setUploadResults(accumulatedResults.success ? accumulatedResults : { success: false, error: accumulatedResults.errors.join(" | ") });
+        setUploadResults(
+          accumulatedResults.success
+            ? accumulatedResults
+            : { success: false, error: accumulatedResults.errors.slice(0, 3).join(" | ") } // Keep error string short
+        );
         setIsUploading(false);
         setProgress(0);
         setUploadPhase("idle");
@@ -122,7 +131,7 @@ export default function UploadPage() {
 
     } catch (err) {
       stopProgress();
-      setUploadResults({ success: false, error: err.message || "Upload batch processing dropped." });
+      setUploadResults({ success: false, error: err.message || "Vercel Payload constraint dropped execution." });
       setIsUploading(false);
       setProgress(0);
       setUploadPhase("idle");
@@ -185,9 +194,8 @@ export default function UploadPage() {
 
         <label
           htmlFor="resume-upload"
-          className={`cursor-pointer block group ${
-            isUploading ? "pointer-events-none" : ""
-          }`}
+          className={`cursor-pointer block group ${isUploading ? "pointer-events-none" : ""
+            }`}
         >
           <div className="w-20 h-20 bg-gray-50 text-black/10 rounded-[2rem] flex items-center justify-center mx-auto group-hover:bg-black group-hover:text-white transition-all duration-500 shadow-inner">
             <Upload size={32} />
@@ -271,19 +279,17 @@ export default function UploadPage() {
           >
             {/* Batch status card */}
             <div
-              className={`p-6 rounded-[2.5rem] border flex items-center justify-between gap-6 shadow-sm ${
-                uploadResults.success
+              className={`p-6 rounded-[2.5rem] border flex items-center justify-between gap-6 shadow-sm ${uploadResults.success
                   ? "bg-white border-gray-100 text-black"
                   : "bg-red-50 border-red-100 text-red-900"
-              }`}
+                }`}
             >
               <div className="flex items-center gap-4">
                 <div
-                  className={`p-3 rounded-2xl ${
-                    uploadResults.success
+                  className={`p-3 rounded-2xl ${uploadResults.success
                       ? "bg-black text-white"
                       : "bg-red-500 text-white"
-                  }`}
+                    }`}
                 >
                   {uploadResults.success ? (
                     <ShieldCheck size={24} />
@@ -296,9 +302,8 @@ export default function UploadPage() {
                     className={`${robotoSlab.className} text-xl uppercase tracking-wider leading-none mb-1`}
                   >
                     {uploadResults.success
-                      ? `${uploadResults.count || 0} Uploaded / ${
-                          uploadResults.duplicateCount || 0
-                        } Duplicates`
+                      ? `${uploadResults.count || 0} Uploaded / ${uploadResults.duplicateCount || 0
+                      } Duplicates`
                       : "Upload Failed"}
                   </h4>
                   <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest leading-none">
