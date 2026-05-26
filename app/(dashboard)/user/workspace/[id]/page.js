@@ -327,7 +327,7 @@ function WorkspaceContent() {
                             <Input label="First Name" name="firstName" value={formData.firstName} onChange={handleChange} disabled={isReadOnly} />
                             <Input label="Middle Name" name="middleName" value={formData.middleName} onChange={handleChange} disabled={isReadOnly} />
                             <Input label="Last Name" name="lastName" value={formData.lastName} onChange={handleChange} disabled={isReadOnly} />
-                            <Input label="Date of Birth" name="dob" value={formData.dob} onChange={handleChange} type="date" disabled={isReadOnly} />
+                            <DobInput label="Date of Birth" name="dob" value={formData.dob} onChange={handleChange} disabled={isReadOnly} />
                             <Input label="Gender" name="gender" value={formData.gender} onChange={handleChange} disabled={isReadOnly} />
                             <Input label="Nationality" name="nationality" value={formData.nationality} onChange={handleChange} disabled={isReadOnly} />
                             <Input label="Marital Status" name="maritalStatus" value={formData.maritalStatus} onChange={handleChange} disabled={isReadOnly} />
@@ -432,3 +432,86 @@ function Input({ label, name, value, onChange, type = "text", disabled = false }
 }
 
 export default dynamic(() => Promise.resolve(WorkspaceContent), { ssr: false });
+
+
+
+function DobInput({ label, name, value, onChange, disabled = false }) {
+    // value is stored as "YYYY-MM-DD" or "DD-MM-YYYY" — we'll use "DD/MM/YYYY" internally
+    // Parse incoming value
+    const parse = (val) => {
+        if (!val) return { dd: "", mm: "", yy: "" };
+        // support YYYY-MM-DD (date input legacy)
+        if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+            const [y, m, d] = val.split("-");
+            return { dd: d, mm: m, yy: y };
+        }
+        // support DD/MM/YYYY
+        const parts = val.split("/");
+        return { dd: parts[0] || "", mm: parts[1] || "", yy: parts[2] || "" };
+    };
+
+    const { dd, mm, yy } = parse(value);
+
+    const emit = (newDd, newMm, newYy) => {
+        // fires synthetic event with name and combined value
+        onChange({ target: { name, value: `${newDd}/${newMm}/${newYy}` } });
+    };
+
+    const handleDd = (e) => {
+        let v = e.target.value.replace(/\D/g, "").slice(0, 2);
+        emit(v, mm, yy);
+    };
+    const handleMm = (e) => {
+        let v = e.target.value.replace(/\D/g, "").slice(0, 2);
+        emit(dd, v, yy);
+    };
+    const handleYy = (e) => {
+        let v = e.target.value.replace(/\D/g, "").slice(0, 4);
+        emit(dd, mm, v);
+    };
+
+    const baseInput = `border-2 rounded-xl px-3 py-3.5 text-xs font-bold outline-none transition-all text-center placeholder:text-zinc-300
+        ${disabled
+            ? "bg-zinc-50 border-zinc-100 text-zinc-800 cursor-not-allowed"
+            : "bg-white border-zinc-200 focus:border-black cursor-text"}`;
+
+    return (
+        <div className="space-y-1.5">
+            <label className="text-[12px] font-semibold tracking-widest text-zinc-800">{label}</label>
+            <div className="flex items-center gap-2">
+                <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={2}
+                    value={dd}
+                    onChange={handleDd}
+                    disabled={disabled}
+                    placeholder="DD"
+                    className={`${baseInput} w-16`}
+                />
+                <span className="text-zinc-300 font-black">/</span>
+                <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={2}
+                    value={mm}
+                    onChange={handleMm}
+                    disabled={disabled}
+                    placeholder="MM"
+                    className={`${baseInput} w-16`}
+                />
+                <span className="text-zinc-300 font-black">/</span>
+                <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={yy}
+                    onChange={handleYy}
+                    disabled={disabled}
+                    placeholder="YYYY"
+                    className={`${baseInput} w-24`}
+                />
+            </div>
+        </div>
+    );
+}
