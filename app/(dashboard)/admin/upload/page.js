@@ -38,23 +38,21 @@ export default function UploadPage() {
     };
   }, []);
 
-  // Server Actions don't expose real byte progress.
-  // This simulates a smooth fill: fast early, slows near 90%, 
-  // then snaps to 100% when the action resolves.
   const startProgressSimulation = () => {
     setProgress(0);
     setUploadPhase("uploading");
     let current = 0;
 
     intervalRef.current = setInterval(() => {
-      const increment = current < 40 ? 3 : current < 70 ? 1.5 : 0.4;
+      // Artificial curve: fast at start, slows down near 90%
+      const increment = current < 40 ? 4 : current < 70 ? 2 : 0.3;
       current = Math.min(current + increment, 90);
       setProgress(Math.round(current));
       if (current >= 90) {
         setUploadPhase("processing");
         clearInterval(intervalRef.current);
       }
-    }, 200);
+    }, 150);
   };
 
   const stopProgress = () => {
@@ -75,27 +73,56 @@ export default function UploadPage() {
     setIsUploading(true);
     startProgressSimulation();
 
-    const formData = new FormData();
-    selectedFiles.forEach((f) => formData.append("files", f));
+    const MAX_BATCH_SIZE = 8 * 1024 * 1024; // 8MB limit per payload chunk to safely bypass the 10MB limit
+    let currentBatchFormData = new FormData();
+    let currentBatchSize = 0;
+    let accumulatedResults = { success: true, uploadedCount: 0, failedCount: 0, errors: [] };
 
     try {
-      const result = await uploadBulkResumes(formData);
+      // Loop through all selected files one by one
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
 
+        // Add file to the current batch
+        currentBatchFormData.append("files", file);
+        currentBatchSize += file.size;
+
+        // If current batch approaches 8MB OR we reached the last file, ship it out!
+        if (currentBatchSize >= MAX_BATCH_SIZE || i === selectedFiles.length - 1) {
+          // Execute the server action for this specific batch block
+          const result = await uploadBulkResumes(currentBatchFormData);
+          
+          // Track and combine background responses
+          if (result && !result.success) {
+            accumulatedResults.success = false;
+            accumulatedResults.errors.push(result.error || "Partial batch upload failed.");
+          } else if (result) {
+            accumulatedResults.uploadedCount += result.uploadedCount || 0;
+          }
+
+          // Reset temporary batch buckets for the next cycle loop
+          currentBatchFormData = new FormData();
+          currentBatchSize = 0;
+        }
+      }
+
+      // Once all batches clear perfectly, finish the progress trackers
       stopProgress();
       setProgress(100);
       setUploadPhase("done");
 
       setTimeout(() => {
-        setUploadResults(result);
+        setUploadResults(accumulatedResults.success ? accumulatedResults : { success: false, error: accumulatedResults.errors.join(" | ") });
         setIsUploading(false);
         setProgress(0);
         setUploadPhase("idle");
         setSelectedFiles([]);
         if (fileInputRef.current) fileInputRef.current.value = "";
       }, 500);
+
     } catch (err) {
       stopProgress();
-      setUploadResults({ success: false, error: err.message || "Upload failed." });
+      setUploadResults({ success: false, error: err.message || "Upload batch processing dropped." });
       setIsUploading(false);
       setProgress(0);
       setUploadPhase("idle");
@@ -110,9 +137,9 @@ export default function UploadPage() {
 
   const phaseLabel = {
     idle: "",
-    uploading: "Sending files...",
-    processing: "Processing on Cloudinary...",
-    done: "Complete",
+    uploading: "Sending file packets...",
+    processing: "Processing layout data on Cloudinary...",
+    done: "Complete!",
   };
 
   return (
