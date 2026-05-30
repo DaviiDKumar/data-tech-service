@@ -132,7 +132,7 @@ function WorkspaceContent() {
 
     const handleSubmit = async () => {
         if (isReadOnly || globalError || isExpired) return;
-        // if (!isFormComplete()) { alert("⚠️ All fields must be filled."); return; }
+        if (!isFormComplete()) { alert("⚠️ All fields must be filled."); return; }
         if (!window.confirm("Submit this resume as final?")) return;
         setIsActionLoading(true);
         try {
@@ -152,7 +152,7 @@ function WorkspaceContent() {
 
     const handleHoldSave = async () => {
         if (isReadOnly || globalError || isExpired) return;
-        // if (!isFormComplete()) { alert("⚠️ All fields must be filled."); return; }
+        if (!isFormComplete()) { alert("⚠️ All fields must be filled."); return; }
         setIsActionLoading(true);
         try {
             const res = await holdAndSaveResume(id, userId, formData);
