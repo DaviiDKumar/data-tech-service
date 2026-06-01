@@ -10,20 +10,16 @@ import {
 
 import nodemailer from "nodemailer";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation"; // Redirect ke liye
+import { redirect } from "next/navigation";
 
-// register function bhi yahan hi add kar dete hain
 export async function registerUser(formData) {
   try {
-    // 1. Database Connection shuru karo
     await connectDB();
 
-    // 2. Form Data extract karo
     const name = formData.get('name')?.trim();
     const email = formData.get('email')?.trim();
     const phone = formData.get('phone')?.trim();
 
-    // 3. Strict Validations (Using our Utils)
     if (!name || name.length < 2) {
       return { success: false, error: "Please enter a valid name (min 2 chars)." };
     }
@@ -34,34 +30,28 @@ export async function registerUser(formData) {
       return { success: false, error: "Phone number must be exactly 10 digits." };
     }
 
-    // 4. Duplicate Check (Security Layer)
     const existingUser = await User.findOne({
-      $or: [{ email: email }, { phone: phone }]
+      $or: [{ email: email.toLowerCase() }, { phone: phone }]
     });
 
     if (existingUser) {
       return {
         success: false,
-        error: "A user with this email or phone already exists."
+        error: "A workspace account with this email or phone number is already active."
       };
     }
 
-    // 5. Credentials Generation (The Logic)
-    const loginId = generateLoginId(); // DTS_17042026xxxxxx
-    const rawPassword = generateRandomPassword(); // ABCD12ef@
+    const loginId = generateLoginId(); 
+    const rawPassword = generateRandomPassword(); 
 
-    // REMOVED: const hashedPassword = await bcrypt.hash(rawPassword, 10);
-
-    // 6. DB Entry (Now saving rawPassword directly)
     await User.create({
       name,
-      email,
+      email: email.toLowerCase(),
       phone,
       loginId,
-      password: rawPassword // <--- Saving the plain text password here
+      password: rawPassword 
     });
 
-    // 7. Email Configuration (Nodemailer)
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -70,31 +60,30 @@ export async function registerUser(formData) {
       },
     });
 
-    // 8. Send Professional Email
     await transporter.sendMail({
-      from: `"DATASORT Admin" <${process.env.EMAIL_USER}>`,
+      from: `"DATASORT Operations" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: "Welcome to DATASORT - Your Account Credentials",
+      subject: "Welcome to DATASORT - Secure Workspace Credentials",
       html: `
         <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
-          <div style="background-color: #2563eb; color: white; padding: 20px; text-align: center;">
-            <h1 style="margin: 0; font-size: 24px; letter-spacing: -1px;">DATASORT</h1>
+          <div style="background-color: #000000; color: white; padding: 25px; text-align: center;">
+            <h1 style="margin: 0; font-size: 22px; letter-spacing: 2px;">DATASORT DATA SERVICES</h1>
           </div>
-          <div style="padding: 30px; color: #1e293b;">
-            <h2 style="margin-top: 0; color: #2563eb;">Hello ${name},</h2>
-            <p>Your workspace account has been created successfully. You can now login using the credentials below:</p>
+          <div style="padding: 30px; color: #1e293b; background-color: #ffffff;">
+            <h2 style="margin-top: 0; color: #000000;">Hello ${name},</h2>
+            <p>Your data extraction terminal account has been generated successfully. Use the parameters below to establish access:</p>
             
-            <div style="background-color: #f8fafc; border-left: 4px solid #2563eb; padding: 15px; margin: 25px 0;">
-              <p style="margin: 5px 0;"><strong>Login ID:</strong> <span style="color: #2563eb;">${loginId}</span></p>
-              <p style="margin: 5px 0;"><strong>Temporary Password:</strong> <span style="color: #2563eb;">${rawPassword}</span></p>
+            <div style="background-color: #f8fafc; border-left: 4px solid #000000; padding: 15px; margin: 25px 0; font-family: monospace;">
+              <p style="margin: 5px 0; font-size: 14px;"><strong>TERMINAL ID:</strong> <span style="color: #2563eb;">${loginId}</span></p>
+              <p style="margin: 5px 0; font-size: 14px;"><strong>PASSWORD:</strong> <span style="color: #2563eb;">${rawPassword}</span></p>
             </div>
 
-            <p style="font-size: 14px; line-height: 1.6;">
-              <strong>Important:</strong> Your account is currently under review. Please complete your KYC and profile setup immediately to ensure uninterrupted access.
+            <p style="font-size: 12px; line-height: 1.6; color: #64748b;">
+              <strong>Security Protocol Warning:</strong> Your access node is currently initialized in evaluation status. Complete your profile build-out inside your dashboard to ensure configuration persistence.
             </p>
           </div>
-          <div style="background-color: #f1f5f9; padding: 15px; text-align: center; font-size: 12px; color: #64748b;">
-            This is an automated message. Please do not reply to this email.
+          <div style="background-color: #f1f5f9; padding: 15px; text-align: center; font-size: 11px; color: #64748b; border-t: 1px solid #e2e8f0;">
+            Automated system dispatch message. Do not reply to this endpoint directly.
           </div>
         </div>
       `
@@ -102,20 +91,18 @@ export async function registerUser(formData) {
 
     return {
       success: true,
-      message: "User registered successfully. Credentials sent to email."
+      message: "User account generated. Access credentials dispatched to mailbox."
     };
 
   } catch (error) {
     console.error("Critical Registration Error:", error);
     return {
       success: false,
-      error: "An internal server error occurred. Please try again later."
+      error: "An internal cloud storage fault dropped connection. Please retry later."
     };
   }
 }
 
-
-// login   function bhi yahan hi add kar dete hain
 export async function loginUser(formData) {
   try {
     await connectDB();
@@ -126,54 +113,31 @@ export async function loginUser(formData) {
       return { success: false, message: "Please provide both ID and Password" };
     }
 
-    // 1. Find user by loginId
     const user = await User.findOne({ loginId });
 
-    // 2. Check if user exists
-    if (!user) {
-      return { success: false, message: "Invalid Login ID or Password" };
+    if (!user || password !== user.password) {
+      return { success: false, message: "Invalid Terminal ID or password mapping parameters." };
     }
 
-    // 3. Password Check
-    const isMatch = password === user.password;
-    if (!isMatch) {
-      return { success: false, message: "Invalid Login ID or Password" };
+    if (user.role === "user" && !user.isActive) {
+      return { 
+        success: false, 
+        message: "Your workstation instance is currently deactivated. Contact administration." 
+      };
     }
 
-    // ─── START: SECURITY & EXPIRY GUARD ─────────────────────────────────────
-   // ─── START: ROLE-BASED SECURITY GUARD ───────────────────────────────────
-    
-    // Admins bypass all expiry and activity checks
-    if (user.role === "user") {
-        
-        // 1. Check for manual deactivation
-        if (!user.isActive) {
-            return { 
-                success: false, 
-                message: "Your account is currently inactive. Please contact the administrator." 
-            };
-        }
-
-      
-    }
-
-    // ─── END: ROLE-BASED SECURITY GUARD ─────────────────────────────────────
-
-    // ─── END: SECURITY & EXPIRY GUARD ───────────────────────────────────────
-
-    // 4. Cookies setup
     const cookieStore = await cookies();
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       path: '/',
-      maxAge: 60 * 60 * 24 * 7, // 7 Days
+      maxAge: 60 * 60 * 24 * 7, // 7 Days persistent loop session
     };
 
-    cookieStore.set('role', user.role, cookieOptions, { httpOnly: true });
-    cookieStore.set('userId', user._id.toString(), cookieOptions,{ httpOnly: true });
-    cookieStore.set('userName', user.name, cookieOptions,{ httpOnly: true });
+    cookieStore.set('role', user.role, cookieOptions);
+    cookieStore.set('userId', user._id.toString(), cookieOptions);
+    cookieStore.set('userName', user.name, cookieOptions);
 
     return { success: true, role: user.role };
 
@@ -183,19 +147,10 @@ export async function loginUser(formData) {
   }
 }
 
-
-//logout function bhi yahan hi add kar dete hain 
 export async function logoutUser() {
   const cookieStore = await cookies();
-
-  // 1. Saari cookies ko delete karo
-  // Server-side deletion httpOnly cookies par bhi kaam karti hai
   cookieStore.delete("role");
   cookieStore.delete("userId");
   cookieStore.delete("userName");
-
-  // 2. Redirect to login page
-  // 'redirect' function Next.js mein internally error throw karke handle hota hai
-  // Isliye iske baad koi aur code execute nahi hoga.
   redirect("/login");
 }

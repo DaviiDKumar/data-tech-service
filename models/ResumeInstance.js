@@ -24,7 +24,7 @@ const ResumeInstanceSchema = new mongoose.Schema({
   // --- WORKFLOW STATUS ---
   status: {
     type: String,
-    enum: ["default", "in-progress", "submitted", "saved", "approved", "rejected", "re-assigned", "review"],
+    enum: ["default", "in-progress", "submitted", "saved", "approved", "rejected", "re-assigned", "review", "skipped"],
     default: "default"
   },
 

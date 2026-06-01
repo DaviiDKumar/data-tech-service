@@ -1,9 +1,9 @@
-// app/(dashboard)/page.js
 "use client";
+
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCookie } from 'cookies-next';
-import { passeroOne } from '@/lib/fonts';
+import { passero } from '@/lib/fonts';
 
 export default function RootDashboardPage() {
   const router = useRouter();
@@ -21,37 +21,34 @@ export default function RootDashboardPage() {
   }, [router]);
 
   return (
-    <div className={`h-screen bg-gray-200 flex flex-col items-center justify-center gap-6 ${passeroOne.className}`}>
+    <div className="h-screen bg-neutral-50 flex flex-col items-center justify-center gap-6 text-black">
       
-      {/* Premium Monochromatic Loader */}
-      <div className="relative w-16 h-16">
-        {/* Outer Ring */}
-        <div className="absolute inset-0 border-[3px] border-white/10 rounded-full"></div>
-        {/* Spinning Top Border */}
-        <div className="absolute inset-0 border-[3px] border-t-white border-transparent rounded-full animate-spin"></div>
+      {/* Premium Monochromatic Spinner */}
+      <div className="relative w-14 h-14">
+        {/* Outer Track Ring */}
+        <div className="absolute inset-0 border-[3px] border-black/5 rounded-full" />
+        {/* Active Animated Boundary */}
+        <div className="absolute inset-0 border-[3px] border-t-black border-transparent rounded-full animate-spin" />
         
-        {/* Center Static Dot */}
+        {/* Center Static Reference Point */}
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+          <div className="w-2 h-2 bg-black rounded-full animate-pulse" />
         </div>
       </div>
 
-      <div className="text-center">
-        {/* Main Text - Lowercase as per your style preference */}
-        <p className="text-sm text-white tracking-[0.2em] animate-pulse">
+      <div className="text-center space-y-1">
+        <p className={`${passero.className} text-lg text-black tracking-[0.2em] lowercase animate-pulse`}>
           routing to workspace
         </p>
-        
-        {/* Subtext */}
-        <p className="text-[10px] text-white/40 font-sans uppercase tracking-widest mt-3">
-          Initializing Secure Session
+        <p className="text-[9px] text-black/30 font-mono uppercase tracking-[0.25em]">
+          Initializing Secure Session Node
         </p>
       </div>
 
-      {/* Decorative "F." Logo style watermark at bottom */}
-      <div className="absolute bottom-12 opacity-20">
-        <div className="w-8 h-8 border border-white rounded-lg flex items-center justify-center">
-          <span className="text-white text-xs">D.</span>
+      {/* Bottom Brutalist Watermark */}
+      <div className="absolute bottom-12 opacity-15">
+        <div className="w-8 h-8 border-2 border-black rounded-xl flex items-center justify-center font-mono font-bold text-xs">
+          D.
         </div>
       </div>
     </div>

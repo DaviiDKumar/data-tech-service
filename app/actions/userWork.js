@@ -522,3 +522,124 @@ export async function getUserTodayAndTotalWork(userId) {
         return { success: false, counts: { total: 0, today: 0 } };
     }
 }
+
+// ─────────────────────────────────────────────────────────────
+// ADD THIS FUNCTION to your existing @/app/actions/userWork.js
+// Place it after the autoAssignAndGetId function
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * skipResume
+ *
+ * Permanently skips the current resume for this user:
+ *  - Deletes the in-progress instance (no formData saved anywhere)
+ *  - Records a lightweight "skipped" marker so this resume is
+ *    NEVER assigned to this user again
+ *  - Decrements inProgressCount (we're closing without submitting)
+ *  - Auto-assigns the next available resume
+ */
+export async function skipResume(resumeId, userId) {
+    try {
+        await connectDB();
+
+        // ── GUARD: check plan expiry ──────────────────────────────
+        const user = await User.findById(userId).select("endDate role stats").lean();
+        if (!user) return { success: false, error: "User not found." };
+
+        const now = new Date();
+        const expiry = new Date(user.endDate);
+        expiry.setHours(23, 59, 59, 999);
+
+        if (now > expiry && user.role !== "admin") {
+            return {
+                success: false,
+                error: "Project Timeline Completed. New assignments are locked.",
+            };
+        }
+
+        // ── STEP 1: Replace the in-progress instance with a "skipped" marker ──
+        // We DON'T delete it — we mark it "skipped" with NO formData.
+        // This is what prevents the resume from ever being assigned again
+        // (it will show up in workedResumes in autoAssignAndGetId).
+        await ResumeInstance.findOneAndUpdate(
+            { resumeId, userId },
+            {
+                $set: {
+                    status: "skipped",
+                    formData: {},          // wipe any partial data
+                    isTouched: false,
+                    updatedAt: new Date(),
+                },
+            },
+            { upsert: true }              // in case somehow no instance existed yet
+        );
+
+        // ── STEP 2: Fix stats — inProgress -1 (floor protected) ──
+        const statsUpdate = {};
+        if (user.stats?.inProgressCount > 0) {
+            statsUpdate["stats.inProgressCount"] = -1;
+        }
+
+        // ── STEP 3: Find next unworked resume ─────────────────────
+        // "workedResumes" now includes the skipped one, so it won't come back
+        const workedResumes = await ResumeInstance.find({ userId }).distinct("resumeId");
+
+        const nextResume = await Resume.findOne({
+            isAvailable: true,
+            _id: { $nin: workedResumes },
+        });
+
+        if (!nextResume) {
+            // No next resume — just apply the stat fix and bail
+            if (Object.keys(statsUpdate).length > 0) {
+                await User.findByIdAndUpdate(userId, { $inc: statsUpdate });
+            }
+            revalidatePath("/user");
+            return {
+                success: true,
+                resumeId: null,
+                message: "Resume skipped. No more resumes available right now.",
+            };
+        }
+
+        // ── STEP 4: Assign next resume + update stats atomically ──
+        await Promise.all([
+            ResumeInstance.create({
+                userId,
+                resumeId: nextResume._id,
+                status: "in-progress",
+                formData: {},
+            }),
+            Resume.findByIdAndUpdate(nextResume._id, {
+                $inc: { totalHits: 1 },
+            }),
+            // inProgressCount: -1 for skipped + 1 for new = net 0 change,
+            // so only apply the floor-protected decrement if it was > 0,
+            // then immediately increment for the new one.
+            User.findByIdAndUpdate(userId, {
+                $inc: {
+                    // If inProgressCount was already 0 (edge case), don't go negative.
+                    // Net effect: stays the same when > 0, goes +1 when it was 0.
+                    "stats.inProgressCount": user.stats?.inProgressCount > 0 ? 0 : 1,
+                },
+            }),
+        ]);
+
+        revalidatePath("/user");
+        return { success: true, resumeId: nextResume._id.toString() };
+
+    } catch (error) {
+        console.error("Skip Resume Error:", error);
+        // Duplicate key: a skipped marker already exists, just find the current in-progress
+        if (error.code === 11000) {
+            const existing = await ResumeInstance.findOne({
+                userId,
+                status: "in-progress",
+            }).lean();
+            if (existing) {
+                return { success: true, resumeId: existing.resumeId.toString() };
+            }
+        }
+        return { success: false, error: error.message };
+    }
+}

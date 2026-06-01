@@ -4,7 +4,7 @@ import { getAllUsers, manageUserAccess } from "@/app/actions/admin";
 import { exportToCSV } from "@/lib/exportCSV";
 import { passero, robotoSlab } from "@/lib/fonts";
 import {
-  Mail, Fingerprint, Loader2, Download, CheckSquare,
+  Mail, Loader2, Download, CheckSquare,
   Square, Search, Calendar, Activity, Power, Save, Plus,
   Filter, X, ChevronDown, Users, ShieldCheck, ShieldX,
   SlidersHorizontal, ArrowUpDown, RotateCcw
@@ -20,13 +20,8 @@ export default function AdminUsersPage() {
   const [manualDates, setManualDates] = useState({});
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState({
-    status: "all",
-    kyc: "all",
-    bank: "all",
-    endDateFrom: "",
-    endDateTo: "",
-    sortBy: "name",
-    sortDir: "asc",
+    status: "all", kyc: "all", bank: "all",
+    endDateFrom: "", endDateTo: "", sortBy: "name", sortDir: "asc",
   });
   const [pendingFilters, setPendingFilters] = useState({ ...filters });
 
@@ -57,7 +52,6 @@ export default function AdminUsersPage() {
       u.loginId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.email?.toLowerCase().includes(searchTerm.toLowerCase())
     );
-
     if (filters.status !== "all")
       result = result.filter(u => filters.status === "active" ? u.isActive : !u.isActive);
     if (filters.kyc !== "all")
@@ -75,12 +69,10 @@ export default function AdminUsersPage() {
       else if (filters.sortBy === "endDate") { valA = new Date(a.endDate || 0); valB = new Date(b.endDate || 0); }
       else if (filters.sortBy === "approved") { valA = a.stats?.approvedCount || 0; valB = b.stats?.approvedCount || 0; }
       else if (filters.sortBy === "joinDate") { valA = new Date(a.startDate || 0); valB = new Date(b.startDate || 0); }
-
       if (valA < valB) return filters.sortDir === "asc" ? -1 : 1;
       if (valA > valB) return filters.sortDir === "asc" ? 1 : -1;
       return 0;
     });
-
     return result;
   }, [users, searchTerm, filters]);
 
@@ -94,9 +86,8 @@ export default function AdminUsersPage() {
     return count;
   }, [filters]);
 
-  const handleDateChange = (userId, newDate) => {
+  const handleDateChange = (userId, newDate) =>
     setManualDates(prev => ({ ...prev, [userId]: newDate }));
-  };
 
   const handleAccessUpdate = async (userId, updates) => {
     setIsActionLoading(userId);
@@ -126,7 +117,11 @@ export default function AdminUsersPage() {
       Account_Status: u.isActive ? "Active" : "Disabled",
       Plan_Start: u.startDate ? new Date(u.startDate).toLocaleDateString('en-GB') : "N/A",
       Plan_End: u.endDate ? new Date(u.endDate).toLocaleDateString('en-GB') : "N/A",
-      Approved: u.stats?.approvedCount || 0, Rejected: u.stats?.rejectedCount || 0
+      Submitted: u.stats?.submittedCount || 0,
+      Approved: u.stats?.approvedCount || 0,
+      Rejected: u.stats?.rejectedCount || 0,
+      Saved: (u.stats?.inProgressCount || 0) + (u.stats?.assignedCount || 0) +
+             (u.stats?.reviewCount || 0),
     }));
     exportToCSV(formatted, "User_Audit_Report", Object.keys(formatted[0]));
   };
@@ -152,16 +147,14 @@ export default function AdminUsersPage() {
         <div>
           <div className="flex items-center gap-3 mb-2">
             <span className="w-2 h-2 rounded-full bg-violet-600 animate-pulse" />
-            <p className="text-[12px]  text-black">Manage All Users</p>
+            <p className="text-[12px] text-black">Manage All Users</p>
           </div>
           <h1 className={`text-5xl lg:text-6xl uppercase font-bold ${robotoSlab.className}`}>
             Manage<span className="text-black/80 text-5xl"> Users</span>
           </h1>
-        
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* Search */}
           <div className="relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-300" size={15} />
             <input
@@ -170,8 +163,6 @@ export default function AdminUsersPage() {
               value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
             />
           </div>
-
-          {/* Filter Button */}
           <button
             onClick={() => { setPendingFilters({ ...filters }); setFilterOpen(true); }}
             className={`relative flex items-center gap-2 px-4 py-3 rounded-xl border text-xs font-bold transition-all
@@ -185,8 +176,6 @@ export default function AdminUsersPage() {
               </span>
             )}
           </button>
-
-          {/* Export */}
           <button
             onClick={handleExportCSV}
             disabled={!selectedIds.length}
@@ -200,15 +189,14 @@ export default function AdminUsersPage() {
       </div>
 
       {/* ── STATS BAR ── */}
-      <div className="grid  lg:grid-cols-5 gap-4 mb-8">
+      <div className="grid lg:grid-cols-5 gap-4 mb-8">
         {[
           { label: "Total Users", value: users.length, icon: <Users size={24} />, color: "text-violet-600", bg: "bg-violet-50 border-violet-100" },
           { label: "Active", value: users.filter(u => u.isActive).length, icon: <ShieldCheck size={24} />, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-100" },
           { label: "Blocked", value: users.filter(u => !u.isActive).length, icon: <ShieldX size={24} />, color: "text-red-500", bg: "bg-red-50 border-red-100" },
-          
         ].map(s => (
           <div key={s.label} className={`flex items-center gap-4 p-4 rounded-xl border ${s.bg}`}>
-            <div className={`${s.color}`}>{s.icon}</div>
+            <div className={s.color}>{s.icon}</div>
             <div>
               <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
               <p className="text-[10px] text-black uppercase tracking-widest">{s.label}</p>
@@ -230,15 +218,15 @@ export default function AdminUsersPage() {
                       : <Square size={16} className="text-white" />}
                   </button>
                 </th>
-                {["User", "Credentials", "Contact", "Verification", "Plan Dates", "Approved", "Rejected", "Access"].map(h => (
-                  <th key={h} className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white text-left whitespace-nowrap">{h}</th>
+                {["User", "Credentials", "Contact", "Verification", "Plan Dates", "Submitted", "Approved", "Rejected", "Saved", "Access"].map(h => (
+                  <th key={h} className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-white text-left whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-20 text-slate-700 text-sm">
+                  <td colSpan={11} className="text-center py-20 text-slate-700 text-sm">
                     No users match current filters.
                   </td>
                 </tr>
@@ -247,6 +235,12 @@ export default function AdminUsersPage() {
                 const isUserActionLoading = isActionLoading === user._id;
                 const displayEndDate = manualDates[user._id] || (user.endDate ? new Date(user.endDate).toISOString().split('T')[0] : "");
                 const isExpired = user.endDate && new Date(user.endDate) < new Date();
+
+                // "Saved" = everything still being worked on / not finalized
+                const savedCount =
+                  (user.stats?.inProgressCount || 0) +
+                  (user.stats?.assignedCount || 0) +
+                  (user.stats?.reviewCount || 0);
 
                 return (
                   <tr
@@ -279,15 +273,12 @@ export default function AdminUsersPage() {
                     </td>
 
                     {/* Credentials */}
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-2">
-                       
-                        <span className="font-mono text-md font-semibold text-black px-2 py-0.5 rounded">{user.password}</span>
-                      </div>
+                    <td className="px-4 py-4">
+                      <span className="font-mono text-md font-semibold text-black px-2 py-0.5 rounded">{user.password}</span>
                     </td>
 
                     {/* Contact */}
-                    <td className="px-5 py-4">
+                    <td className="px-4 py-4">
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-2">
                           <Activity size={11} className="text-black shrink-0" />
@@ -295,13 +286,13 @@ export default function AdminUsersPage() {
                         </div>
                         <div className="flex items-center gap-2">
                           <Mail size={11} className="text-black shrink-0" />
-                          <span className="text-[11px] text-black truncate max-w-40">{user.email}</span>
+                          <span className="text-[11px] text-black truncate max-w-36">{user.email}</span>
                         </div>
                       </div>
                     </td>
 
                     {/* Verification */}
-                    <td className="px-5 py-4">
+                    <td className="px-4 py-4">
                       <div className="flex flex-col gap-1.5">
                         <StatusPill label="KYC" active={user.kycStatus === 'verified' || user.kycStatus === 'approved'} />
                         <StatusPill label="Bank" active={user.bankDetailsStatus === 'verified' || user.bankDetailsStatus === 'approved'} />
@@ -309,12 +300,10 @@ export default function AdminUsersPage() {
                     </td>
 
                     {/* Plan Dates */}
-                    <td className="px-5 py-4">
+                    <td className="px-4 py-4">
                       <div className="space-y-1 mb-2">
                         <p className="text-[10px] text-black">
-                          Start: <span className="text-black font-medium">
-                            {user.startDate ? new Date(user.startDate).toLocaleDateString('en-GB') : '—'}
-                          </span>
+                          Start: <span className="font-medium">{user.startDate ? new Date(user.startDate).toLocaleDateString('en-GB') : '—'}</span>
                         </p>
                         <p className="text-[10px] text-black">
                           End: <span className={`font-bold ${isExpired ? 'text-red-500' : 'text-black'}`}>
@@ -351,18 +340,28 @@ export default function AdminUsersPage() {
                       </div>
                     </td>
 
+                    {/* Submitted */}
+                    <td className="px-4 py-4 text-center">
+                      <StatBadge value={user.stats?.submittedCount || 0} color="text-blue-500" bg="bg-blue-50" />
+                    </td>
+
                     {/* Approved */}
-                    <td className="px-5 py-4 text-center">
-                      <span className="text-2xl font-bold text-emerald-600">{user.stats?.approvedCount || 0}</span>
+                    <td className="px-4 py-4 text-center">
+                      <StatBadge value={user.stats?.approvedCount || 0} color="text-emerald-600" bg="bg-emerald-50" />
                     </td>
 
                     {/* Rejected */}
-                    <td className="px-5 py-4 text-center">
-                      <span className="text-2xl font-bold text-red-400">{user.stats?.rejectedCount || 0}</span>
+                    <td className="px-4 py-4 text-center">
+                      <StatBadge value={user.stats?.rejectedCount || 0} color="text-red-400" bg="bg-red-50" />
+                    </td>
+
+                    {/* Saved (in-progress + assigned + review) */}
+                    <td className="px-4 py-4 text-center">
+                      <StatBadge value={savedCount} color="text-amber-600" bg="bg-amber-50" />
                     </td>
 
                     {/* Access */}
-                    <td className="px-5 py-4">
+                    <td className="px-4 py-4">
                       <div className="flex items-center gap-3 justify-end">
                         <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded
                           ${user.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
@@ -402,12 +401,10 @@ export default function AdminUsersPage() {
       {filterOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-md mx-4">
-
-            {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center border border-violet-100">
-                  <Filter size={15} className="text-violet-600" />
+                  <SlidersHorizontal size={15} className="text-violet-600" />
                 </div>
                 <div>
                   <h2 className="text-sm font-bold">Filter & Sort</h2>
@@ -418,17 +415,12 @@ export default function AdminUsersPage() {
                 <X size={16} className="text-slate-400" />
               </button>
             </div>
-
-            {/* Modal Body */}
             <div className="px-6 py-5 space-y-5">
-
-              {/* Account Status */}
               <div>
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">Account Status</label>
                 <div className="flex gap-2">
                   {["all", "active", "blocked"].map(opt => (
-                    <button key={opt}
-                      onClick={() => setPendingFilters(p => ({ ...p, status: opt }))}
+                    <button key={opt} onClick={() => setPendingFilters(p => ({ ...p, status: opt }))}
                       className={`flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider border transition-all
                         ${pendingFilters.status === opt
                           ? opt === 'active' ? 'bg-emerald-500 text-white border-emerald-500'
@@ -440,14 +432,11 @@ export default function AdminUsersPage() {
                   ))}
                 </div>
               </div>
-
-              {/* KYC Status */}
               <div>
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">KYC Status</label>
                 <div className="flex gap-2">
                   {["all", "verified", "pending"].map(opt => (
-                    <button key={opt}
-                      onClick={() => setPendingFilters(p => ({ ...p, kyc: opt }))}
+                    <button key={opt} onClick={() => setPendingFilters(p => ({ ...p, kyc: opt }))}
                       className={`flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider border transition-all
                         ${pendingFilters.kyc === opt ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'}`}>
                       {opt}
@@ -455,14 +444,11 @@ export default function AdminUsersPage() {
                   ))}
                 </div>
               </div>
-
-              {/* Bank Status */}
               <div>
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">Bank Status</label>
                 <div className="flex gap-2">
                   {["all", "verified", "pending"].map(opt => (
-                    <button key={opt}
-                      onClick={() => setPendingFilters(p => ({ ...p, bank: opt }))}
+                    <button key={opt} onClick={() => setPendingFilters(p => ({ ...p, bank: opt }))}
                       className={`flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider border transition-all
                         ${pendingFilters.bank === opt ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'}`}>
                       {opt}
@@ -470,8 +456,6 @@ export default function AdminUsersPage() {
                   ))}
                 </div>
               </div>
-
-              {/* End Date Range */}
               <div>
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">Plan End Date Range</label>
                 <div className="flex gap-3">
@@ -489,17 +473,13 @@ export default function AdminUsersPage() {
                   </div>
                 </div>
               </div>
-
-              {/* Sort */}
               <div>
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">Sort By</label>
                 <div className="flex gap-2">
                   <div className="flex-1 relative">
-                    <select
-                      value={pendingFilters.sortBy}
+                    <select value={pendingFilters.sortBy}
                       onChange={e => setPendingFilters(p => ({ ...p, sortBy: e.target.value }))}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none appearance-none focus:border-violet-400 transition-colors bg-white"
-                    >
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none appearance-none focus:border-violet-400 transition-colors bg-white">
                       <option value="name">Name</option>
                       <option value="endDate">End Date</option>
                       <option value="joinDate">Join Date</option>
@@ -517,8 +497,6 @@ export default function AdminUsersPage() {
                 </div>
               </div>
             </div>
-
-            {/* Modal Footer */}
             <div className="px-6 py-4 border-t border-slate-100 flex gap-3">
               <button onClick={resetFilters}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-500 hover:bg-slate-50 transition-colors">
@@ -533,6 +511,14 @@ export default function AdminUsersPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function StatBadge({ value, color, bg }) {
+  return (
+    <span className={`inline-flex items-center justify-center w-10 h-10 rounded-xl text-lg font-black ${color} ${bg}`}>
+      {value}
+    </span>
   );
 }
 

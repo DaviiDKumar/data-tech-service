@@ -6,19 +6,19 @@ import {
     saveResumeProgress,
     submitResume,
     holdAndSaveResume,
-    getWorkspaceData
+    getWorkspaceData,
+    skipResume,                          // ← NEW IMPORT
 } from "@/app/actions/userWork";
 import { useUserStore } from "@/store/useUserStore";
 import { passero } from "@/lib/fonts";
 import {
     ArrowLeft, CheckCircle, Loader2,
     FileText, Database, User,
-    GraduationCap, Briefcase, MapPin, Lock, ArrowUpRight, CloudCheck
+    GraduationCap, Briefcase, MapPin, Lock, ArrowUpRight, CloudCheck,
+    SkipForward,                         // ← NEW ICON
 } from "lucide-react";
 import Link from "next/link";
 
-// ── FIX 1: Dynamically import the entire PDF viewer to prevent SSR
-//    from touching browser-only APIs like DOMMatrix inside pdfjs.
 const PdfViewer = dynamic(() => import('./PdfViewer'), {
     ssr: false,
     loading: () => (
@@ -46,6 +46,8 @@ function WorkspaceContent() {
     const [loading, setLoading] = useState(!!(id && id !== "undefined" && userId));
     const [saveStatus, setSaveStatus] = useState("synced");
     const [isActionLoading, setIsActionLoading] = useState(false);
+    // ── FIX: Track which button is loading separately so UI stays clear ──
+    const [activeAction, setActiveAction] = useState(null); // 'submit' | 'save' | 'skip'
     const [globalError, setGlobalError] = useState(null);
 
     const [formData, setFormData] = useState({
@@ -131,10 +133,10 @@ function WorkspaceContent() {
         Object.values(formData).every(val => val?.toString().trim() !== "");
 
     const handleSubmit = async () => {
-        if (isReadOnly || globalError || isExpired) return;
+        if (isReadOnly || globalError || isExpired || activeAction) return;
         if (!isFormComplete()) { alert("⚠️ All fields must be filled."); return; }
         if (!window.confirm("Submit this resume as final?")) return;
-        setIsActionLoading(true);
+        setActiveAction('submit');
         try {
             const res = await submitResume(id, userId, formData);
             if (res.success) {
@@ -142,32 +144,71 @@ function WorkspaceContent() {
                 router.push("/user/submitted");
             } else {
                 alert(res.error || "Submission failed.");
-                setIsActionLoading(false);
             }
         } catch {
             alert("An error occurred.");
-            setIsActionLoading(false);
+        } finally {
+            setActiveAction(null);
         }
     };
 
     const handleHoldSave = async () => {
-        if (isReadOnly || globalError || isExpired) return;
+        if (isReadOnly || globalError || isExpired || activeAction) return;
         if (!isFormComplete()) { alert("⚠️ All fields must be filled."); return; }
-        setIsActionLoading(true);
+        setActiveAction('save');
         try {
             const res = await holdAndSaveResume(id, userId, formData);
             if (res.success) {
                 if (res.newData) updateUser(res.newData);
-                router.push("/user/allresumesavailable");
+                // ── FIX: was routing to /user/allresumesavailable which isn't in the sidebar nav ──
+                router.push("/user/reassigned");
             } else {
                 alert(res.error || "Save failed.");
-                setIsActionLoading(false);
             }
         } catch {
             alert("An error occurred.");
-            setIsActionLoading(false);
+        } finally {
+            setActiveAction(null);
         }
     };
+
+    // ── NEW: Skip handler ─────────────────────────────────────────────────
+    const handleSkip = async () => {
+        if (isReadOnly || globalError || isExpired || activeAction) return;
+
+        // Flush any pending auto-save before skipping so formData isn't lost
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+            saveTimeoutRef.current = null;
+        }
+        await performSync(formData);
+
+        if (!window.confirm(
+            "Skip this resume? Your progress will be saved and you'll get a new one."
+        )) return;
+
+        setActiveAction('skip');
+        try {
+            const res = await skipResume(id, userId);
+            if (res.success) {
+                if (res.resumeId) {
+                    // Go straight to the next workspace
+                    router.push(`/user/workspace/${res.resumeId}`);
+                } else {
+                    // No more resumes available
+                    alert(res.message || "No more resumes available right now.");
+                    router.push("/user");
+                }
+            } else {
+                alert(res.error || "Skip failed.");
+            }
+        } catch {
+            alert("An error occurred while skipping.");
+        } finally {
+            setActiveAction(null);
+        }
+    };
+    // ─────────────────────────────────────────────────────────────────────
 
     if (globalError || isExpired) {
         return (
@@ -204,6 +245,8 @@ function WorkspaceContent() {
         </div>
     );
 
+    const anyActionLoading = !!activeAction;
+
     return (
         <div className="h-screen flex flex-col bg-white overflow-hidden font-sans">
 
@@ -211,7 +254,7 @@ function WorkspaceContent() {
             <header className="shrink-0 h-24 border-b border-slate-500 px-6 flex items-center justify-between bg-white z-50">
                 <div className="flex items-center gap-4">
                     <Link
-                        href={isReadOnly ? "/user/rejected" : "/user/allresumesavailable"}
+                        href={isReadOnly ? "/user/rejected" : "/user/reassigned"}
                         className="p-2 hover:bg-black hover:text-white rounded-xl transition-all"
                     >
                         <ArrowLeft size={18} />
@@ -233,13 +276,32 @@ function WorkspaceContent() {
                 </div>
 
                 {!isReadOnly && (
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
+
+                        {/* ── SKIP BUTTON (new) ── */}
+                        <button
+                            onClick={handleSkip}
+                            disabled={anyActionLoading}
+                            title="Save progress and move to next resume"
+                            className="group px-5 py-3 border-2 border-amber-400 bg-white text-amber-600 text-[10px] font-black uppercase tracking-[0.2em] cursor-pointer hover:bg-amber-400 hover:text-white hover:shadow-[0_0_20px_rgba(251,191,36,0.4)] transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl flex items-center justify-center min-w-[130px]"
+                        >
+                            {activeAction === 'skip' ? (
+                                <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                                <span className="flex items-center gap-2">
+                                    <SkipForward size={15} className="group-hover:translate-x-0.5 transition-transform" />
+                                    Skip
+                                </span>
+                            )}
+                        </button>
+
+                        {/* ── HOLD & SAVE ── */}
                         <button
                             onClick={handleHoldSave}
-                            disabled={isActionLoading}
+                            disabled={anyActionLoading}
                             className="group px-6 py-3 border-2 border-violet-600 bg-white text-violet-600 text-[10px] font-black uppercase tracking-[0.2em] cursor-pointer hover:bg-violet-600 hover:text-white hover:shadow-[0_0_20px_rgba(124,58,237,0.4)] transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl flex items-center justify-center min-w-[150px]"
                         >
-                            {isActionLoading ? (
+                            {activeAction === 'save' ? (
                                 <Loader2 size={14} className="animate-spin" />
                             ) : (
                                 <span className="flex items-center gap-2">
@@ -249,12 +311,13 @@ function WorkspaceContent() {
                             )}
                         </button>
 
+                        {/* ── SUBMIT FINAL ── */}
                         <button
                             onClick={handleSubmit}
-                            disabled={isActionLoading}
+                            disabled={anyActionLoading}
                             className="group px-6 py-3 bg-emerald-600 border-2 border-emerald-600 text-white text-[10px] font-black uppercase tracking-[0.2em] cursor-pointer hover:bg-emerald-700 hover:border-emerald-700 hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl flex items-center justify-center min-w-[150px]"
                         >
-                            {isActionLoading ? (
+                            {activeAction === 'submit' ? (
                                 <Loader2 size={14} className="animate-spin" />
                             ) : (
                                 <span className="flex items-center gap-2">
@@ -275,8 +338,6 @@ function WorkspaceContent() {
                     <div className="flex-1 bg-zinc-200 p-4 relative overflow-hidden">
                         <div className="w-full h-full bg-white rounded-2xl border-2 border-black shadow-[10px_10px_0px_0px_rgba(0,0,0,0.05)] relative overflow-hidden">
                             {resume?.fileUrl ? (
-                                // ── FIX 1 (cont): Use the dynamically imported component here.
-                                //    All pdfjs code lives inside PdfViewer.jsx and never runs on the server.
                                 <PdfViewer fileUrl={resume.fileUrl} />
                             ) : (
                                 <div className="w-full h-full flex flex-col items-center justify-center gap-4 bg-white">
