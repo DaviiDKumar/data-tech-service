@@ -11,22 +11,22 @@ import {
 } from "lucide-react";
 
 const RESUME_PAGE_SIZE = 20;
-const USER_PAGE_SIZE = 8; // Restricts viewport list bloat on the sidebar node container
+const USER_PAGE_SIZE = 8;
 
 export default function AdminReassignPage() {
   const [users, setUsers] = useState([]);
   const [resumes, setResumes] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [selectedResumes, setSelectedResumes] = useState([]); 
+  const [selectedResumes, setSelectedResumes] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [resumesLoading, setResumesLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-  
+
   // Isolated multi-search states
   const [userSearchTerm, setUserSearchTerm] = useState("");
   const [resumeSearchTerm, setResumeSearchTerm] = useState("");
-  
+
   // Independent Double-Tier pagination counters
   const [userCurrentPage, setUserCurrentPage] = useState(1);
   const [resumeCurrentPage, setResumeCurrentPage] = useState(1);
@@ -48,7 +48,7 @@ export default function AdminReassignPage() {
 
   // ── Load resumes when a user is selected ─────────────────────────
   const handleUserSelect = async (user) => {
-    if (selectedUser?._id === user._id) return; 
+    if (selectedUser?._id === user._id) return;
     setSelectedUser(user);
     setSelectedResumes([]);
     setResumeCurrentPage(1);
@@ -72,8 +72,8 @@ export default function AdminReassignPage() {
   const filteredUsers = useMemo(() => {
     const term = userSearchTerm.toLowerCase().trim();
     if (!term) return users;
-    return users.filter(u => 
-      u.name?.toLowerCase().includes(term) || 
+    return users.filter(u =>
+      u.name?.toLowerCase().includes(term) ||
       u.email?.toLowerCase().includes(term)
     );
   }, [users, userSearchTerm]);
@@ -90,7 +90,6 @@ export default function AdminReassignPage() {
   useEffect(() => {
     setUserCurrentPage(1);
   }, [userSearchTerm]);
-
 
   // ── RESUME DATA MUTATION FILTER & PAGINATION ─────────────────────
   const filteredResumes = useMemo(() => {
@@ -158,6 +157,26 @@ export default function AdminReassignPage() {
 
   const clearSelection = () => setSelectedResumes([]);
 
+  // ── Pagination page-number helper ────────────────────────────────
+  const renderPageNumbers = () => {
+    const pages = [];
+    const delta = 2; // siblings on each side of current page
+
+    for (let i = 1; i <= totalResumePages; i++) {
+      if (
+        i === 1 ||
+        i === totalResumePages ||
+        (i >= safeResumePage - delta && i <= safeResumePage + delta)
+      ) {
+        pages.push(i);
+      } else if (pages[pages.length - 1] !== "...") {
+        pages.push("...");
+      }
+    }
+
+    return pages;
+  };
+
   // ── Execute reassign ──────────────────────────────────────────────
   const handleFinalReassign = async () => {
     if (!selectedUser || selectedResumes.length === 0) return;
@@ -177,7 +196,7 @@ export default function AdminReassignPage() {
         toast.success(`Allocated ${selectedResumes.length} resumes to ${selectedUser.name}`);
         setSelectedResumes([]);
         setResumeCurrentPage(1);
-        handleUserSelect(selectedUser); 
+        handleUserSelect(selectedUser);
       } else {
         toast.error(res.error || "Execution pipeline rejected the payload.");
       }
