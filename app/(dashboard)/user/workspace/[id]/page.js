@@ -1,4 +1,5 @@
 "use client";
+
 import dynamic from 'next/dynamic';
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -7,7 +8,7 @@ import {
     submitResume,
     holdAndSaveResume,
     getWorkspaceData,
-    skipResume,                          // ← NEW IMPORT
+    skipResume,
 } from "@/app/actions/userWork";
 import { useUserStore } from "@/store/useUserStore";
 import { passero } from "@/lib/fonts";
@@ -15,7 +16,7 @@ import {
     ArrowLeft, CheckCircle, Loader2,
     FileText, Database, User,
     GraduationCap, Briefcase, MapPin, Lock, ArrowUpRight, CloudCheck,
-    SkipForward,                         // ← NEW ICON
+    SkipForward
 } from "lucide-react";
 import Link from "next/link";
 
@@ -45,23 +46,17 @@ function WorkspaceContent() {
     const [resume, setResume] = useState(null);
     const [loading, setLoading] = useState(!!(id && id !== "undefined" && userId));
     const [saveStatus, setSaveStatus] = useState("synced");
-    const [isActionLoading, setIsActionLoading] = useState(false);
-    // ── FIX: Track which button is loading separately so UI stays clear ──
     const [activeAction, setActiveAction] = useState(null); // 'submit' | 'save' | 'skip'
     const [globalError, setGlobalError] = useState(null);
 
     const [formData, setFormData] = useState({
-        // Identity
         firstName: "", middleName: "", lastName: "", dob: "", gender: "",
         nationality: "", maritalStatus: "", passport: "", hobbies: "", languages: "",
-        // Contact
         address: "", landmark: "", city: "", state: "", pincode: "", mobile: "", email: "",
-        // Academic
         sscResult: "", sscBoard: "", sscYear: "",
         hscResult: "", hscBoard: "", hscYear: "",
         gradDegree: "", gradResult: "", gradUniversity: "", gradYear: "",
         pgDegree: "", pgResult: "", pgYear: "", higherEducation: "",
-        // Experience
         expMonths: "", expYears: "", totalMonths: "", noOfCompanies: "", lastEmployer: ""
     });
 
@@ -160,7 +155,6 @@ function WorkspaceContent() {
             const res = await holdAndSaveResume(id, userId, formData);
             if (res.success) {
                 if (res.newData) updateUser(res.newData);
-                // ── FIX: was routing to /user/allresumesavailable which isn't in the sidebar nav ──
                 router.push("/user/reassigned");
             } else {
                 alert(res.error || "Save failed.");
@@ -172,43 +166,36 @@ function WorkspaceContent() {
         }
     };
 
-    // ── NEW: Skip handler ─────────────────────────────────────────────────
     const handleSkip = async () => {
         if (isReadOnly || globalError || isExpired || activeAction) return;
 
-        // Flush any pending auto-save before skipping so formData isn't lost
         if (saveTimeoutRef.current) {
             clearTimeout(saveTimeoutRef.current);
             saveTimeoutRef.current = null;
         }
-        await performSync(formData);
 
-        if (!window.confirm(
-            "Skip this resume? Your progress will be saved and you'll get a new one."
-        )) return;
+        if (!window.confirm("Skip this template layout and request the next available data file?")) return;
 
         setActiveAction('skip');
         try {
             const res = await skipResume(id, userId);
             if (res.success) {
                 if (res.resumeId) {
-                    // Go straight to the next workspace
                     router.push(`/user/workspace/${res.resumeId}`);
+                    router.refresh(); // Forces hot reload of server components inside layout
                 } else {
-                    // No more resumes available
-                    alert(res.message || "No more resumes available right now.");
+                    alert(res.message || "All files completed across system queues.");
                     router.push("/user");
                 }
             } else {
-                alert(res.error || "Skip failed.");
+                alert(res.error || "Skip process rejected.");
             }
         } catch {
-            alert("An error occurred while skipping.");
+            alert("Internal worker script crash while executing skip.");
         } finally {
             setActiveAction(null);
         }
     };
-    // ─────────────────────────────────────────────────────────────────────
 
     if (globalError || isExpired) {
         return (
@@ -250,7 +237,7 @@ function WorkspaceContent() {
     return (
         <div className="h-screen flex flex-col bg-white overflow-hidden font-sans">
 
-            {/* ── HEADER ── */}
+            {/* --- HEADER --- */}
             <header className="shrink-0 h-24 border-b border-slate-500 px-6 flex items-center justify-between bg-white z-50">
                 <div className="flex items-center gap-4">
                     <Link
@@ -277,29 +264,27 @@ function WorkspaceContent() {
 
                 {!isReadOnly && (
                     <div className="flex items-center gap-3">
-
-                        {/* ── SKIP BUTTON (new) ── */}
+                        {/* SKIP ACTION */}
                         <button
                             onClick={handleSkip}
                             disabled={anyActionLoading}
-                            title="Save progress and move to next resume"
-                            className="group px-5 py-3 border-2 border-amber-400 bg-white text-amber-600 text-[10px] font-black uppercase tracking-[0.2em] cursor-pointer hover:bg-amber-400 hover:text-white hover:shadow-[0_0_20px_rgba(251,191,36,0.4)] transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl flex items-center justify-center min-w-[130px]"
+                            className="group px-5 py-3 border-2 border-amber-400 bg-white text-amber-600 text-[10px] font-black uppercase tracking-[0.2em] cursor-pointer hover:bg-amber-400 hover:text-white transition-all duration-300 disabled:opacity-30 rounded-xl flex items-center justify-center min-w-[130px]"
                         >
                             {activeAction === 'skip' ? (
                                 <Loader2 size={14} className="animate-spin" />
                             ) : (
                                 <span className="flex items-center gap-2">
-                                    <SkipForward size={15} className="group-hover:translate-x-0.5 transition-transform" />
-                                    Skip
+                                    <SkipForward size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                                    Skip Track
                                 </span>
                             )}
                         </button>
 
-                        {/* ── HOLD & SAVE ── */}
+                        {/* HOLD & SAVE */}
                         <button
                             onClick={handleHoldSave}
                             disabled={anyActionLoading}
-                            className="group px-6 py-3 border-2 border-violet-600 bg-white text-violet-600 text-[10px] font-black uppercase tracking-[0.2em] cursor-pointer hover:bg-violet-600 hover:text-white hover:shadow-[0_0_20px_rgba(124,58,237,0.4)] transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl flex items-center justify-center min-w-[150px]"
+                            className="group px-6 py-3 border-2 border-violet-600 bg-white text-violet-600 text-[10px] font-black uppercase tracking-[0.2em] cursor-pointer hover:bg-violet-600 hover:text-white transition-all duration-300 disabled:opacity-30 rounded-xl flex items-center justify-center min-w-[150px]"
                         >
                             {activeAction === 'save' ? (
                                 <Loader2 size={14} className="animate-spin" />
@@ -311,11 +296,11 @@ function WorkspaceContent() {
                             )}
                         </button>
 
-                        {/* ── SUBMIT FINAL ── */}
+                        {/* SUBMIT FINAL */}
                         <button
                             onClick={handleSubmit}
                             disabled={anyActionLoading}
-                            className="group px-6 py-3 bg-emerald-600 border-2 border-emerald-600 text-white text-[10px] font-black uppercase tracking-[0.2em] cursor-pointer hover:bg-emerald-700 hover:border-emerald-700 hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl flex items-center justify-center min-w-[150px]"
+                            className="group px-6 py-3 bg-emerald-600 border-2 border-emerald-600 text-white text-[10px] font-black uppercase tracking-[0.2em] cursor-pointer hover:bg-emerald-700 hover:border-emerald-700 transition-all duration-300 disabled:opacity-30 rounded-xl flex items-center justify-center min-w-[150px]"
                         >
                             {activeAction === 'submit' ? (
                                 <Loader2 size={14} className="animate-spin" />
@@ -330,10 +315,9 @@ function WorkspaceContent() {
                 )}
             </header>
 
-            {/* ── BODY ── */}
+            {/* --- BODY --- */}
             <main className="flex flex-1 min-h-0 overflow-hidden">
-
-                {/* LEFT: PDF VIEWER */}
+                {/* LEFT: CANVAS PDF */}
                 <section className="w-1/2 h-full flex flex-col border-r-2 bg-white overflow-hidden">
                     <div className="flex-1 bg-zinc-200 p-4 relative overflow-hidden">
                         <div className="w-full h-full bg-white rounded-2xl border-2 border-black shadow-[10px_10px_0px_0px_rgba(0,0,0,0.05)] relative overflow-hidden">
@@ -351,7 +335,6 @@ function WorkspaceContent() {
                             )}
                         </div>
                     </div>
-
                     <div className="px-6 py-3 bg-white border-t-2 border-slate-100 flex justify-between items-center">
                         <div className="flex items-center gap-2">
                             <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
@@ -361,10 +344,9 @@ function WorkspaceContent() {
                     </div>
                 </section>
 
-                {/* RIGHT: FORM */}
+                {/* RIGHT: DATA FIELDS SHEET FORM */}
                 <section className={`w-1/2 h-full overflow-y-auto bg-white p-10 scroll-smooth ${isReadOnly ? 'bg-zinc-50' : ''}`}>
                     <div className="max-w-2xl mx-auto space-y-14 pb-24">
-
                         <header className="space-y-3">
                             <div className="inline-flex items-center gap-2 px-3 py-1 bg-black text-white rounded-md">
                                 <Database size={12} />
@@ -377,7 +359,7 @@ function WorkspaceContent() {
                             </h3>
                         </header>
 
-                        {/* ── IDENTITY ── */}
+                        {/* --- IDENTITY SECTION --- */}
                         <FormSection icon={<User size={14} />} title="Identity Details">
                             <Input label="First Name" name="firstName" value={formData.firstName} onChange={handleChange} disabled={isReadOnly} />
                             <Input label="Middle Name" name="middleName" value={formData.middleName} onChange={handleChange} disabled={isReadOnly} />
@@ -391,10 +373,10 @@ function WorkspaceContent() {
                             <Input label="Linguistic Skills" name="languages" value={formData.languages} onChange={handleChange} disabled={isReadOnly} />
                         </FormSection>
 
-                        {/* ── CONTACT ── */}
+                        {/* --- CONTACT SECTION --- */}
                         <FormSection icon={<MapPin size={14} />} title="Geolocation & Comms">
                             <Input label="Full Address" name="address" value={formData.address} onChange={handleChange} disabled={isReadOnly} />
-                            <Input label="Landmark" name="landmark" value={formData.landmark} onChange={handleChange} disabled={isReadOnly} />
+                            <Input label="Landmark Location" name="landmark" value={formData.landmark} onChange={handleChange} disabled={isReadOnly} />
                             <Input label="City" name="city" value={formData.city} onChange={handleChange} disabled={isReadOnly} />
                             <Input label="State / Region" name="state" value={formData.state} onChange={handleChange} disabled={isReadOnly} />
                             <Input label="Pincode" name="pincode" value={formData.pincode} onChange={handleChange} disabled={isReadOnly} />
@@ -402,7 +384,7 @@ function WorkspaceContent() {
                             <Input label="Verified Email" name="email" value={formData.email} onChange={handleChange} type="email" disabled={isReadOnly} />
                         </FormSection>
 
-                        {/* ── ACADEMIC ── */}
+                        {/* --- ACADEMIC SECTION --- */}
                         <FormSection icon={<GraduationCap size={14} />} title="Academic History">
                             <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-5 space-y-4">
                                 <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400">SSC Details</p>
@@ -432,7 +414,7 @@ function WorkspaceContent() {
                             </div>
                         </FormSection>
 
-                        {/* ── EXPERIENCE ── */}
+                        {/* --- WORK EXPERIENCE SECTION --- */}
                         <FormSection icon={<Briefcase size={14} />} title="Work Experience">
                             <Input label="Experience (Months)" name="expMonths" value={formData.expMonths} onChange={handleChange} disabled={isReadOnly} />
                             <Input label="Experience (Years)" name="expYears" value={formData.expYears} onChange={handleChange} disabled={isReadOnly} />
@@ -450,8 +432,6 @@ function WorkspaceContent() {
         </div>
     );
 }
-
-/* ── SUB-COMPONENTS ── */
 
 function FormSection({ icon, title, children }) {
     return (
@@ -475,12 +455,12 @@ function Input({ label, name, value, onChange, type = "text", disabled = false }
                 value={value || ""}
                 onChange={onChange}
                 disabled={disabled}
+                placeholder={disabled ? "" : "---"}
                 className={`w-full border-2 rounded-xl px-5 py-3.5 text-xs font-bold outline-none transition-all placeholder:text-zinc-300
                     ${disabled
                         ? 'bg-zinc-50 border-zinc-100 text-zinc-800 cursor-not-allowed'
                         : 'bg-white border-zinc-200 focus:border-black cursor-text'
                     }`}
-                placeholder={disabled ? "" : "---"}
             />
         </div>
     );
@@ -496,7 +476,7 @@ function DobInput({ label, name, value, onChange, disabled = false }) {
                 value={value || ""}
                 onChange={onChange}
                 disabled={disabled}
-                placeholder=""
+                placeholder="DD/MM/YYYY"
                 maxLength={10}
                 className={`w-full border-2 rounded-xl px-5 py-3.5 text-xs font-bold outline-none transition-all placeholder:text-zinc-300
                     ${disabled

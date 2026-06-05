@@ -291,11 +291,13 @@ export async function holdAndSaveResume(resumeId, userId, data) {
 }
 
 //reusme
+// app/actions/userWork.js
+
 export async function submitResume(resumeId, userId, data) {
     try {
         await connectDB();
 
-        // 1. Get current states
+        // 1. Get current execution state parameters simultaneously
         const [currentDoc, userDoc] = await Promise.all([
             ResumeInstance.findOne({ resumeId, userId }).lean(),
             User.findById(userId).select("stats").lean()
@@ -304,7 +306,7 @@ export async function submitResume(resumeId, userId, data) {
         const oldStatus = currentDoc ? currentDoc.status : null;
         const currentStats = userDoc?.stats || {};
 
-        // 2. Update the Resume
+        // 2. Commit extracted form payload to storage
         await ResumeInstance.findOneAndUpdate(
             { resumeId, userId },
             {
@@ -319,30 +321,36 @@ export async function submitResume(resumeId, userId, data) {
             { upsert: true }
         );
 
-        // 3. DYNAMIC STATS LOGIC (With Zero-Floor Protection)
+        // 3. Dynamic metrics updates with zero-floor protections
         const statsUpdate = {};
 
         if (oldStatus !== 'submitted') {
-            // INCREASE SUBMITTED: 0 -> 1, 1 -> 2, etc.
             statsUpdate["stats.submittedCount"] = 1;
 
-            // DECREASE IN-PROGRESS: Only if > 0
             if ((oldStatus === 'in-progress' || oldStatus === 're-assigned') && (currentStats.inProgressCount > 0)) {
                 statsUpdate["stats.inProgressCount"] = -1;
             }
-
-            // DECREASE REJECTED: Only if > 0
             else if (oldStatus === 'rejected' && (currentStats.rejectedCount > 0)) {
                 statsUpdate["stats.rejectedCount"] = -1;
             }
         }
 
-        // 4. Update the User Atomicly
+        // Apply stat increment parameters to core User model
         if (Object.keys(statsUpdate).length > 0) {
             await User.findByIdAndUpdate(userId, { $inc: statsUpdate });
         }
 
-        // 5. Fetch Final Data for UI
+        // 4. Calculate today's real-time productivity limits cleanly on the backend
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+
+        const todayCount = await ResumeInstance.countDocuments({
+            userId,
+            status: { $in: ["submitted", "saved", "approved"] },
+            updatedAt: { $gte: startOfToday }
+        });
+
+        // 5. Fetch fresh integrated data structures to pass directly down the wire
         const updatedUser = await User.findById(userId).select("stats kycStatus bankDetailsStatus").lean();
 
         revalidatePath("/user");
@@ -350,7 +358,10 @@ export async function submitResume(resumeId, userId, data) {
         return {
             success: true,
             newData: {
-                stats: updatedUser.stats,
+                stats: {
+                    ...updatedUser.stats,
+                    todayCompletedCount: todayCount // Track inside your store
+                },
                 kycStatus: updatedUser.kycStatus,
                 bankDetailsStatus: updatedUser.bankDetailsStatus
             }
@@ -361,7 +372,6 @@ export async function submitResume(resumeId, userId, data) {
         return { success: false, error: error.message };
     }
 }
-
 
 
 // User ke submitted resumes fetch karne ka server action
@@ -537,14 +547,15 @@ export async function getUserTodayAndTotalWork(userId) {
  *    NEVER assigned to this user again
  *  - Decrements inProgressCount (we're closing without submitting)
  *  - Auto-assigns the next available resume
- */
+ */// app/actions/userWork.js
+
 export async function skipResume(resumeId, userId) {
     try {
         await connectDB();
 
-        // ── GUARD: check plan expiry ──────────────────────────────
+        // ── GUARD: Check plan expiry parameters ──────────────────────────
         const user = await User.findById(userId).select("endDate role stats").lean();
-        if (!user) return { success: false, error: "User not found." };
+        if (!user) return { success: false, error: "User profile node not located." };
 
         const now = new Date();
         const expiry = new Date(user.endDate);
@@ -557,31 +568,23 @@ export async function skipResume(resumeId, userId) {
             };
         }
 
-        // ── STEP 1: Replace the in-progress instance with a "skipped" marker ──
-        // We DON'T delete it — we mark it "skipped" with NO formData.
-        // This is what prevents the resume from ever being assigned again
-        // (it will show up in workedResumes in autoAssignAndGetId).
+        // ── STEP 1: Flip current instance to skipped marker state ──
+        // This removes it from ongoing calculations instantly
         await ResumeInstance.findOneAndUpdate(
             { resumeId, userId },
             {
                 $set: {
                     status: "skipped",
-                    formData: {},          // wipe any partial data
+                    formData: {},          // Wipe out any accidental partial text progress
                     isTouched: false,
                     updatedAt: new Date(),
                 },
             },
-            { upsert: true }              // in case somehow no instance existed yet
+            { upsert: true }
         );
 
-        // ── STEP 2: Fix stats — inProgress -1 (floor protected) ──
-        const statsUpdate = {};
-        if (user.stats?.inProgressCount > 0) {
-            statsUpdate["stats.inProgressCount"] = -1;
-        }
-
-        // ── STEP 3: Find next unworked resume ─────────────────────
-        // "workedResumes" now includes the skipped one, so it won't come back
+        // ── STEP 2: Find next unworked resume tracking token ─────────────────────
+        // "workedResumes" now includes the skipped item, so it won't be repeated
         const workedResumes = await ResumeInstance.find({ userId }).distinct("resumeId");
 
         const nextResume = await Resume.findOne({
@@ -590,7 +593,11 @@ export async function skipResume(resumeId, userId) {
         });
 
         if (!nextResume) {
-            // No next resume — just apply the stat fix and bail
+            // No next resume — safely decrease ongoing work down by 1 and exit
+            const statsUpdate = {};
+            if (user.stats?.inProgressCount > 0) {
+                statsUpdate["stats.inProgressCount"] = -1;
+            }
             if (Object.keys(statsUpdate).length > 0) {
                 await User.findByIdAndUpdate(userId, { $inc: statsUpdate });
             }
@@ -602,7 +609,8 @@ export async function skipResume(resumeId, userId) {
             };
         }
 
-        // ── STEP 4: Assign next resume + update stats atomically ──
+        // ── STEP 3: Assign next resume + execute atomic storage state changes ──
+        // Using an explicit $set locks the ongoing counter perfectly at 1, preventing double counts.
         await Promise.all([
             ResumeInstance.create({
                 userId,
@@ -613,15 +621,10 @@ export async function skipResume(resumeId, userId) {
             Resume.findByIdAndUpdate(nextResume._id, {
                 $inc: { totalHits: 1 },
             }),
-            // inProgressCount: -1 for skipped + 1 for new = net 0 change,
-            // so only apply the floor-protected decrement if it was > 0,
-            // then immediately increment for the new one.
             User.findByIdAndUpdate(userId, {
-                $inc: {
-                    // If inProgressCount was already 0 (edge case), don't go negative.
-                    // Net effect: stays the same when > 0, goes +1 when it was 0.
-                    "stats.inProgressCount": user.stats?.inProgressCount > 0 ? 0 : 1,
-                },
+                $set: {
+                    "stats.inProgressCount": 1
+                }
             }),
         ]);
 
@@ -630,7 +633,7 @@ export async function skipResume(resumeId, userId) {
 
     } catch (error) {
         console.error("Skip Resume Error:", error);
-        // Duplicate key: a skipped marker already exists, just find the current in-progress
+        
         if (error.code === 11000) {
             const existing = await ResumeInstance.findOne({
                 userId,
@@ -640,6 +643,6 @@ export async function skipResume(resumeId, userId) {
                 return { success: true, resumeId: existing.resumeId.toString() };
             }
         }
-        return { success: false, error: error.message };
+        return { success: false, error: "Internal database task swap failure." };
     }
 }

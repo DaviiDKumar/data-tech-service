@@ -1,7 +1,9 @@
 // store/useWorkspaceStore.js
+import { create } from 'zustand'; // <-- ADD THIS LINE
+
 export const useWorkspaceStore = create((set) => ({
-  assignedResumes: [], // ResumeInstance Schema ka data
-  activeInstance: null, // Jo resume abhi screen par khula hai
+  assignedResumes: [], 
+  activeInstance: null, 
   stats: {
     pending: 0,
     submitted: 0,

@@ -1,28 +1,35 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useUserStore } from "@/store/useUserStore";
-import { robotoSlab, ubuntu } from "@/lib/fonts";
+import { useAdminStore } from "@/store/useAdminStore"; // Binding admin store hooks
+import { robotoSlab, ubuntu, passero } from "@/lib/fonts";
 import { fetchAdminLiveStats } from "@/app/actions/admin";
 import Chart from "chart.js/auto";
+import { create } from 'zustand'; // <-- ADD THIS LINE
 import {
-  UploadCloud, Users, FileText,
-  ArrowUpRight, Activity, CalendarClock, MessageCircleQuestionMark, CheckCheck, FileChartLine, SquareCheckBig, SquareUser,
-  Database, Loader2, TrendingUp, FileClock, ChevronRight
+  UploadCloud, Users, FileText, ArrowUpRight, Activity, 
+  CalendarClock, MessageCircleQuestionMark, CheckCheck, 
+  FileChartLine, SquareCheckBig, SquareUser, Database, 
+  Loader2, TrendingUp, FileClock
 } from 'lucide-react';
 
 export default function AdminPage() {
-  const { user } = useUserStore();
   const [adminStats, setAdminStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState("");
+  
+  // Explicitly reference the canvas storage container to completely clear rendering memory leaks
+  const chartRef = useRef(null); 
 
   useEffect(() => {
     async function getStats() {
       try {
         const res = await fetchAdminLiveStats();
-        if (res.success) setAdminStats(res);
+        if (res.success) {
+          setAdminStats(res);
+        }
       } catch (error) {
         console.error("❌ Dashboard Sync Error:", error);
       } finally {
@@ -33,7 +40,8 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    const tick = () => setCurrentTime(new Date().toLocaleTimeString());
+    const tick = () => setCurrentTime(new Date().toLocaleTimeString("en-IN", { hour12: true }));
+    tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
   }, []);
@@ -60,27 +68,32 @@ export default function AdminPage() {
     };
   }, [adminStats]);
 
-  // Chart.js effect
+  // Safe ChartJS Initialization Lifecycle Loop
   useEffect(() => {
     if (!stats.chartData.length) return;
 
-    const existing = Chart.getChart("trendChart");
-    if (existing) existing.destroy();
+    const canvasCtx = document.getElementById("trendChart");
+    if (!canvasCtx) return;
+
+    // Strict cleanup check using refs before instantiating a new chart
+    if (chartRef.current) {
+      chartRef.current.destroy();
+    }
 
     const labels = stats.chartData.map(d =>
-      new Date(d.date).toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric' })
+      new Date(d.date).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' })
     );
     const counts = stats.chartData.map(d => d.count);
-    const peak = Math.max(...counts);
+    const peak = Math.max(...counts, 0);
 
-    new Chart(document.getElementById("trendChart"), {
+    chartRef.current = new Chart(canvasCtx, {
       type: "bar",
       data: {
         labels,
         datasets: [{
           label: "Resumes",
           data: counts,
-          backgroundColor: counts.map(v => v === peak ? "#5b21b6" : "#8b5cf6"),
+          backgroundColor: counts.map(v => v === peak && peak > 0 ? "#5b21b6" : "#8b5cf6"),
           borderRadius: 6,
           borderSkipped: false,
         }]
@@ -115,12 +128,20 @@ export default function AdminPage() {
         }
       }
     });
+
+    // Complete cleanup on unmount or refresh events
+    return () => {
+      if (chartRef.current) {
+        chartRef.current.destroy();
+        chartRef.current = null;
+      }
+    };
   }, [stats.chartData]);
 
   const quickActions = [
     { name: 'Upload Resume', icon: <UploadCloud size={20} />, path: '/admin/upload', isBlack: true },
     { name: 'All Users', icon: <Users size={20} />, path: '/admin/users', isBlack: false },
-    { name: 'All Resumes', icon: <FileText size={20} />, path: '/admin/resumes', isBlack: false },
+    { name: 'All Resumes', icon: <FileText size={20} />, path: '/admin/savedresume', isBlack: false },
     { name: 'All Queries', icon: <MessageCircleQuestionMark size={20} />, path: '/admin/queries', isBlack: false },
   ];
 
@@ -128,8 +149,8 @@ export default function AdminPage() {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-white">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="animate-spin text-blue-600" size={40} />
-          <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Syncing Infrastructure</p>
+          <Loader2 className="animate-spin text-violet-600" size={40} />
+          <p className={`${passero.className} text-[11px] text-zinc-400 font-bold uppercase tracking-widest`}>Syncing Core Infrastructure...</p>
         </div>
       </div>
     );
@@ -181,40 +202,14 @@ export default function AdminPage() {
 
         {/* --- METRIC NODES --- */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <MetricNode
-            label="Activated Resumes"
-            value={stats.totalInstances}
-            sub="Total Resumes Started"
-            type="violet"
-            icon={<CheckCheck size={24} />}
-          />
-          <MetricNode
-            label="Total Approved"
-            value={stats.approved}
-            sub="Approved Resumes Count"
-            type="emerald"
-            icon={<SquareCheckBig size={24} />}
-          />
-          <MetricNode
-            label="Total Uploaded"
-            value={stats.totalUploaded}
-            sub="Total Resumes Count"
-            type="red"
-            icon={<FileChartLine size={24} />}
-          />
-          <MetricNode
-            label="Active Users"
-            value={stats.activeUsers}
-            sub="Currently Active Users"
-            type="yellow"
-            icon={<SquareUser size={24} />}
-          />
+          <MetricNode label="Activated Resumes" value={stats.totalInstances} sub="Total Resumes Started" type="violet" icon={<CheckCheck size={24} />} />
+          <MetricNode label="Total Approved" value={stats.approved} sub="Approved Resumes Count" type="emerald" icon={<SquareCheckBig size={24} />} />
+          <MetricNode label="Total Uploaded" value={stats.totalUploaded} sub="Total Resumes Count" type="red" icon={<FileChartLine size={24} />} />
+          <MetricNode label="Active Users" value={stats.activeUsers} sub="Currently Active Users" type="yellow" icon={<SquareUser size={24} />} />
         </div>
 
         {/* --- PIPELINE + LATENCY + STORAGE --- */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-          {/* Resume Stage Pipeline */}
           <div className="col-span-2 bg-white border border-slate-100 rounded-xl shadow-sm p-8">
             <div className="flex items-center gap-3 mb-8">
               <div className="w-9 h-9 rounded-xl bg-violet-50 flex items-center justify-center border border-violet-100">
@@ -234,9 +229,7 @@ export default function AdminPage() {
                 { label: "Approved", value: stats.approved, color: "bg-emerald-500", dot: "bg-emerald-500" },
                 { label: "Rejected", value: stats.rejected, color: "bg-red-500", dot: "bg-red-500" },
               ].map((stage) => {
-                const pct = stats.totalInstances > 0
-                  ? Math.round(((stage.value ?? 0) / stats.totalInstances) * 100)
-                  : 0;
+                const pct = stats.totalInstances > 0 ? Math.round((stage.value / stats.totalInstances) * 100) : 0;
                 return (
                   <div key={stage.label}>
                     <div className="flex justify-between items-center mb-2">
@@ -245,29 +238,24 @@ export default function AdminPage() {
                         <span className="text-sm font-medium text-slate-700">{stage.label}</span>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 
-                  ${stage.color === 'bg-emerald-500' ? 'bg-emerald-50 text-emerald-600' :
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded
+                          ${stage.color === 'bg-emerald-500' ? 'bg-emerald-50 text-emerald-600' :
                             stage.color === 'bg-red-500' ? 'bg-red-50 text-red-600' :
-                              stage.color === 'bg-violet-500' ? 'bg-violet-50 text-violet-600' :
-                                stage.color === 'bg-blue-500' ? 'bg-blue-50 text-blue-600' :
-                                  'bg-green-50 text-green-600'}`}>
+                            stage.color === 'bg-violet-500' ? 'bg-violet-50 text-violet-600' :
+                            stage.color === 'bg-blue-500' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'}`}>
                           {pct}%
                         </span>
-                        <span className="text-sm font-bold text-slate-800 w-6 text-right">{stage.value ?? 0}</span>
+                        <span className="text-sm font-bold text-slate-800 w-6 text-right">{stage.value}</span>
                       </div>
                     </div>
-                    <div className="w-full bg-slate-100 rounded-2xl  h-2 overflow-hidden">
-                      <div
-                        className={`${stage.color} h-2  transition-all duration-700`}
-                        style={{ width: `${pct}%` }}
-                      />
+                    <div className="w-full bg-slate-100 rounded-2xl h-2 overflow-hidden">
+                      <div className={`${stage.color} h-2 transition-all duration-700`} style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 );
               })}
             </div>
 
-            {/* Mini donut-style total summary at bottom */}
             <div className="mt-8 pt-6 border-t border-slate-50 grid grid-cols-3 gap-4">
               {[
                 { label: "In Progress", value: stats.inProgress, color: "text-violet-600" },
@@ -282,10 +270,7 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* Right Column */}
           <div className="flex flex-col gap-6">
-
-            {/* Latency Monitor */}
             <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-8 flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -295,44 +280,22 @@ export default function AdminPage() {
                   <h3 className={`${robotoSlab.className} text-lg font-bold`}>DB Latency</h3>
                 </div>
                 <span className={`text-[10px] font-bold px-2 py-1 rounded-full
-          ${stats.latency < 100 ? 'bg-emerald-100 text-emerald-600' :
-                    stats.latency < 300 ? 'bg-amber-100 text-amber-600' : 'bg-red-100 text-red-600'}`}>
+                  ${stats.latency < 100 ? 'bg-emerald-100 text-emerald-600' : stats.latency < 300 ? 'bg-amber-100 text-amber-600' : 'bg-red-100 text-red-600'}`}>
                   {stats.latency < 100 ? '● GOOD' : stats.latency < 300 ? '● OK' : '● SLOW'}
                 </span>
               </div>
-
               <div>
                 <p className={`${robotoSlab.className} text-5xl font-bold tabular-nums text-violet-600 leading-none`}>
-                  {stats.latency}
-                  <span className="text-lg font-normal text-slate-400 ml-1">ms</span>
+                  {stats.latency}<span className="text-lg font-normal text-slate-400 ml-1">ms</span>
                 </p>
                 <p className="text-xs text-slate-400 mt-2">Last measured on page load</p>
               </div>
-
-              {/* Mini latency bar visual */}
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-[10px] text-slate-400 uppercase tracking-widest">
-                  <span>0ms</span>
-                  <span>150ms</span>
-                  <span>300ms+</span>
-                </div>
-                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className={`h-2 rounded-full transition-all duration-700
-              ${stats.latency < 100 ? 'bg-emerald-500' :
-                        stats.latency < 300 ? 'bg-amber-500' : 'bg-red-500'}`}
-                    style={{ width: `${Math.min((stats.latency / 300) * 100, 100)}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-[10px]">
-                  <span className="text-emerald-500 font-bold">Excellent</span>
-                  <span className="text-amber-500 font-bold">Moderate</span>
-                  <span className="text-red-500 font-bold">Slow</span>
-                </div>
+              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div className={`h-2 rounded-full transition-all duration-700 ${stats.latency < 100 ? 'bg-emerald-500' : stats.latency < 300 ? 'bg-amber-500' : 'bg-red-500'}`}
+                  style={{ width: `${Math.min((stats.latency / 300) * 100, 100)}%` }} />
               </div>
             </div>
 
-            {/* Storage Usage */}
             <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-8 flex flex-col gap-4">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-violet-50 flex items-center justify-center border border-violet-100">
@@ -344,18 +307,12 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* Circle-style usage display */}
               <div className="flex items-center gap-6">
                 <div className="relative w-20 h-20 flex-shrink-0">
                   <svg viewBox="0 0 36 36" className="w-20 h-20 -rotate-90">
                     <circle cx="18" cy="18" r="15.9" fill="none" stroke="#f1f5f9" strokeWidth="3" />
-                    <circle
-                      cx="18" cy="18" r="15.9" fill="none"
-                      stroke={stats.dbUsage < 60 ? "#10b981" : stats.dbUsage < 80 ? "#f59e0b" : "#ef4444"}
-                      strokeWidth="3"
-                      strokeDasharray={`${stats.dbUsage} ${100 - stats.dbUsage}`}
-                      strokeLinecap="round"
-                    />
+                    <circle cx="18" cy="18" r="15.9" fill="none" stroke={stats.dbUsage < 60 ? "#10b981" : stats.dbUsage < 80 ? "#f59e0b" : "#ef4444"}
+                      strokeWidth="3" strokeDasharray={`${stats.dbUsage} ${100 - stats.dbUsage}`} strokeLinecap="round" />
                   </svg>
                   <div className="absolute inset-0 flex items-center justify-center">
                     <span className={`${robotoSlab.className} text-sm font-bold text-slate-800`}>{stats.dbUsage}%</span>
@@ -369,45 +326,17 @@ export default function AdminPage() {
                       <span className="font-bold text-slate-800">{Math.round(512 * stats.dbUsage / 100)} MB</span>
                     </div>
                     <div className="w-full bg-slate-100 rounded-full h-1.5">
-                      <div
-                        className={`h-1.5 rounded-full transition-all duration-700
-                  ${stats.dbUsage < 60 ? 'bg-emerald-500' :
-                            stats.dbUsage < 80 ? 'bg-amber-500' : 'bg-red-500'}`}
-                        style={{ width: `${stats.dbUsage}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="text-slate-500">Free</span>
-                      <span className="font-bold text-slate-800">{Math.round(512 * (100 - stats.dbUsage) / 100)} MB</span>
-                    </div>
-                    <div className="w-full bg-slate-100 rounded-full h-1.5">
-                      <div
-                        className="h-1.5 rounded-full bg-slate-300 transition-all duration-700"
-                        style={{ width: `${100 - stats.dbUsage}%` }}
-                      />
+                      <div className={`h-1.5 rounded-full transition-all duration-700 ${stats.dbUsage < 60 ? 'bg-emerald-500' : stats.dbUsage < 80 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${stats.dbUsage}%` }} />
                     </div>
                   </div>
                 </div>
               </div>
-
-              <span className={`text-xs font-bold px-3 py-1.5 rounded-full w-fit
-        ${stats.dbUsage < 60 ? 'bg-emerald-50 text-emerald-600' :
-                  stats.dbUsage < 80 ? 'bg-amber-50 text-amber-600' : 'bg-red-50 text-red-600'}`}>
-                {stats.dbUsage < 60 ? '● Healthy' : stats.dbUsage < 80 ? '● Moderate Usage' : '● Critical — Upgrade Soon'}
-              </span>
             </div>
-
           </div>
         </div>
 
         {/* --- 7-DAY TREND CHART --- */}
-
-
         <div className="bg-white border border-slate-100 rounded-[2.5rem] shadow-sm p-8">
-
-          {/* Chart Header */}
           <div className="flex justify-between items-start mb-8">
             <div className="flex gap-4">
               <div className="w-10 h-10 rounded-2xl bg-violet-50 flex items-center justify-center border border-violet-100">
@@ -421,13 +350,8 @@ export default function AdminPage() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2 bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-full">
-              <FileClock size={12} className="text-slate-400" />
-              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">7-Day Cycle</span>
-            </div>
           </div>
 
-          {/* Summary Cards */}
           <div className="grid grid-cols-3 gap-4 mb-8">
             {[
               { label: "Total (7d)", value: chartTotal },
@@ -441,19 +365,10 @@ export default function AdminPage() {
             ))}
           </div>
 
-          {/* Chart Canvas */}
-          {stats.chartData.length === 0 ? (
-            <div className="h-48 flex items-center justify-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-              <p className="text-slate-400 text-sm italic">Syncing with DTS Analytics Cluster...</p>
-            </div>
-          ) : (
-            <div className="relative w-full h-56 overflow-hidden">
-              <canvas id="trendChart" role="img" aria-label="Bar chart showing resume submissions over the last 7 days"
-                style={{ maxWidth: "100%" }} />
-            </div>
-          )}
+          <div className="relative w-full h-56 overflow-hidden">
+            <canvas id="trendChart" role="img" aria-label="Bar chart showing resume submissions over the last 7 days" />
+          </div>
         </div>
-
 
         {/* --- ACTION HISTORY --- */}
         <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-8">
@@ -468,10 +383,10 @@ export default function AdminPage() {
                     <div className={`w-2 h-2 rounded-full flex-shrink-0 ${item.status === 'approved' ? 'bg-emerald-500' : 'bg-red-500'}`} />
                     <div>
                       <p className="text-sm font-semibold text-slate-800">
-                        Resume <span className="font-mono text-xs text-slate-400">{item.resumeId.slice(-6)}</span>
+                        Resume <span className="font-mono text-xs text-slate-400">{item.resumeId.slice(-6).toUpperCase()}</span>
                       </p>
                       <p className="text-xs text-slate-400">
-                        User <span className="font-mono">{item.userId.slice(-6)}</span>
+                        User <span className="font-mono">{item.userId.slice(-6).toUpperCase()}</span>
                       </p>
                     </div>
                   </div>
@@ -481,7 +396,7 @@ export default function AdminPage() {
                       {item.status.toUpperCase()}
                     </span>
                     <p className="text-[11px] text-slate-400 mt-1">
-                      {new Date(item.updatedAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
+                      {new Date(item.updatedAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short', hour12: true })}
                     </p>
                   </div>
                 </div>
@@ -497,29 +412,17 @@ export default function AdminPage() {
 
 function MetricNode({ label, value, sub, type, icon }) {
   const themes = {
-    violet: {
-      bg: "bg-gradient-to-br from-violet-600 to-indigo-900 shadow-violet-200/50",
-      iconBg: "bg-indigo-400/20"
-    },
-    red: {
-      bg: "bg-gradient-to-br from-red-600 to-rose-950 shadow-red-300/40",
-      iconBg: "bg-rose-400/20"
-    },
-    emerald: {
-      bg: "bg-gradient-to-br from-emerald-500 to-teal-900 shadow-emerald-200/50",
-      iconBg: "bg-teal-400/20"
-    },
-    yellow: {
-      bg: "bg-gradient-to-br from-amber-500 to-orange-950 shadow-orange-300/30",
-      iconBg: "bg-orange-400/20"
-    },
+    violet: { bg: "bg-gradient-to-br from-violet-600 to-indigo-900 shadow-violet-200/50", iconBg: "bg-indigo-400/20" },
+    red: { bg: "bg-gradient-to-br from-red-600 to-rose-950 shadow-red-300/40", iconBg: "bg-rose-400/20" },
+    emerald: { bg: "bg-gradient-to-br from-emerald-500 to-teal-900 shadow-emerald-200/50", iconBg: "bg-teal-400/20" },
+    yellow: { bg: "bg-gradient-to-br from-amber-500 to-orange-950 shadow-orange-300/30", iconBg: "bg-orange-400/20" },
   };
 
   const theme = themes[type] || themes.violet;
 
   return (
-    <div className={`p-8 rounded-lg ${theme.bg} transition-all duration-500 hover:scale-[1.02] flex flex-row items-center justify-between h-48 shadow-xl relative overflow-hidden group`}>
-      <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/5 rounded-full blur-3xl group-hover:bg-white/10 transition-all duration-700" />
+    <div className={`p-8 rounded-lg ${theme.bg} flex flex-row items-center justify-between h-48 shadow-xl relative overflow-hidden group`}>
+      <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/5 rounded-full blur-3xl" />
       <div className="relative z-10 flex flex-col justify-between h-full py-1">
         <p className="text-[14px] font-bold text-white pb-4">{label}</p>
         <div>
@@ -530,11 +433,10 @@ function MetricNode({ label, value, sub, type, icon }) {
         </div>
       </div>
       <div className={`relative z-10 w-14 h-14 ${theme.iconBg} flex items-center justify-center backdrop-blur-md border border-white/5 shadow-inner`}>
-        <div className="text-white transform group-hover:scale-110 transition-transform duration-300">
+        <div className="text-white">
           {icon}
         </div>
       </div>
     </div>
   );
 }
-

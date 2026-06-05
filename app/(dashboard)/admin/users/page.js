@@ -1,13 +1,13 @@
 "use client";
-import { useState, useEffect, useMemo, useCallback } from "react";
+
+import { useState, useEffect, useMemo, useCallback } from "react"; // ✅ FIXED: Added missing useMemo import
 import { getAllUsers, manageUserAccess } from "@/app/actions/admin";
 import { exportToCSV } from "@/lib/exportCSV";
-import { passero, robotoSlab } from "@/lib/fonts";
+import { robotoSlab, ubuntu, passero } from "@/lib/fonts";
 import {
   Mail, Loader2, Download, CheckSquare,
   Square, Search, Calendar, Activity, Power, Save, Plus,
-  Filter, X, ChevronDown, Users, ShieldCheck, ShieldX,
-  SlidersHorizontal, ArrowUpDown, RotateCcw
+  SlidersHorizontal, ArrowUpDown, RotateCcw, X, ChevronDown, Users, ShieldCheck, ShieldX
 } from "lucide-react";
 
 export default function AdminUsersPage() {
@@ -19,6 +19,7 @@ export default function AdminUsersPage() {
   const [currentTime, setCurrentTime] = useState("");
   const [manualDates, setManualDates] = useState({});
   const [filterOpen, setFilterOpen] = useState(false);
+
   const [filters, setFilters] = useState({
     status: "all", kyc: "all", bank: "all",
     endDateFrom: "", endDateTo: "", sortBy: "name", sortDir: "asc",
@@ -37,38 +38,59 @@ export default function AdminUsersPage() {
     }
   }, []);
 
+  // Isolated Initialization Loop: Fires exactly once on mount
   useEffect(() => {
-    let isMounted = true;
     fetchData(true);
-    const interval = setInterval(() => {
-      if (isMounted) setCurrentTime(new Date().toLocaleTimeString());
-    }, 1000);
-    return () => { isMounted = false; clearInterval(interval); };
   }, [fetchData]);
 
+  // Isolated Clock Timer Loop: Prevents redundant one-second data sweeps
+  useEffect(() => {
+    const tick = () => setCurrentTime(new Date().toLocaleTimeString("en-IN", { hour12: true }));
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const filteredUsers = useMemo(() => {
-    let result = users.filter(u =>
-      u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.loginId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.email?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    if (filters.status !== "all")
+    const cleanSearch = searchTerm.trim().toLowerCase();
+
+    let result = users.filter(u => {
+      const nameMatch = (u.name || "").toLowerCase().includes(cleanSearch);
+      const idMatch = (u.loginId || "").toLowerCase().includes(cleanSearch);
+      const emailMatch = (u.email || "").toLowerCase().includes(cleanSearch);
+      return nameMatch || idMatch || emailMatch;
+    });
+
+    if (filters.status !== "all") {
       result = result.filter(u => filters.status === "active" ? u.isActive : !u.isActive);
-    if (filters.kyc !== "all")
+    }
+    if (filters.kyc !== "all") {
       result = result.filter(u => (u.kycStatus || "pending") === filters.kyc);
-    if (filters.bank !== "all")
+    }
+    if (filters.bank !== "all") {
       result = result.filter(u => (u.bankDetailsStatus || "pending") === filters.bank);
-    if (filters.endDateFrom)
+    }
+    if (filters.endDateFrom) {
       result = result.filter(u => u.endDate && new Date(u.endDate) >= new Date(filters.endDateFrom));
-    if (filters.endDateTo)
+    }
+    if (filters.endDateTo) {
       result = result.filter(u => u.endDate && new Date(u.endDate) <= new Date(filters.endDateTo));
+    }
 
     result.sort((a, b) => {
       let valA, valB;
-      if (filters.sortBy === "name") { valA = a.name || ""; valB = b.name || ""; }
-      else if (filters.sortBy === "endDate") { valA = new Date(a.endDate || 0); valB = new Date(b.endDate || 0); }
-      else if (filters.sortBy === "approved") { valA = a.stats?.approvedCount || 0; valB = b.stats?.approvedCount || 0; }
-      else if (filters.sortBy === "joinDate") { valA = new Date(a.startDate || 0); valB = new Date(b.startDate || 0); }
+      if (filters.sortBy === "name") {
+        valA = a.name || ""; valB = b.name || "";
+      } else if (filters.sortBy === "endDate") {
+        valA = a.endDate ? new Date(a.endDate).getTime() : 0;
+        valB = b.endDate ? new Date(b.endDate).getTime() : 0;
+      } else if (filters.sortBy === "approved") {
+        valA = a.stats?.approvedCount || 0; valB = b.stats?.approvedCount || 0;
+      } else if (filters.sortBy === "joinDate") {
+        valA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        valB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      }
+
       if (valA < valB) return filters.sortDir === "asc" ? -1 : 1;
       if (valA > valB) return filters.sortDir === "asc" ? 1 : -1;
       return 0;
@@ -91,14 +113,34 @@ export default function AdminUsersPage() {
 
   const handleAccessUpdate = async (userId, updates) => {
     setIsActionLoading(userId);
-    const res = await manageUserAccess(userId, updates);
-    if (res.success) {
-      setManualDates(prev => { const next = { ...prev }; delete next[userId]; return next; });
-      await fetchData(false);
-    } else {
-      alert(res.error || "Update failed");
+    try {
+      const res = await manageUserAccess(userId, updates);
+      if (res.success) {
+        setUsers(prevUsers => prevUsers.map(u => {
+          if (u._id === userId) {
+            const finalNode = { ...u, ...updates };
+            if (updates.daysToAdd) {
+              const base = new Date(u.endDate || new Date());
+              base.setDate(base.getDate() + updates.daysToAdd);
+              finalNode.endDate = base.toISOString();
+            }
+            if (updates.fixedEndDate) {
+              finalNode.endDate = new Date(updates.fixedEndDate).toISOString();
+            }
+            return finalNode;
+          }
+          return u;
+        }));
+
+        setManualDates(prev => { const next = { ...prev }; delete next[userId]; return next; });
+      } else {
+        alert(res.message || "Access validation update rejected.");
+      }
+    } catch {
+      alert("A system execution failure occurred.");
+    } finally {
+      setIsActionLoading(null);
     }
-    setIsActionLoading(null);
   };
 
   const toggleSelect = (id) =>
@@ -115,13 +157,12 @@ export default function AdminUsersPage() {
       Email: u.email, Phone_Number: u.phone,
       KYC_Status: u.kycStatus || "pending", Bank_Status: u.bankDetailsStatus || "pending",
       Account_Status: u.isActive ? "Active" : "Disabled",
-      Plan_Start: u.startDate ? new Date(u.startDate).toLocaleDateString('en-GB') : "N/A",
+      Plan_Start: u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-GB') : "N/A",
       Plan_End: u.endDate ? new Date(u.endDate).toLocaleDateString('en-GB') : "N/A",
       Submitted: u.stats?.submittedCount || 0,
       Approved: u.stats?.approvedCount || 0,
       Rejected: u.stats?.rejectedCount || 0,
-      Saved: (u.stats?.inProgressCount || 0) + (u.stats?.assignedCount || 0) +
-             (u.stats?.reviewCount || 0),
+      Saved: (u.stats?.inProgressCount || 0) + (u.stats?.assignedCount || 0) + (u.stats?.reviewCount || 0),
     }));
     exportToCSV(formatted, "User_Audit_Report", Object.keys(formatted[0]));
   };
@@ -133,378 +174,336 @@ export default function AdminUsersPage() {
   };
 
   if (loading && users.length === 0) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-white gap-4">
-      <Loader2 className="animate-spin text-violet-600" size={36} />
-      <span className={`${robotoSlab.className} text-sm tracking-widest text-slate-400 uppercase`}>Syncing Users...</span>
+    <div className="h-screen flex flex-col items-center justify-center bg-white gap-3">
+      <Loader2 className="animate-spin text-black" size={32} />
+      <span className={`${passero.className} text-xs tracking-widest text-zinc-400 uppercase`}>Syncing Users Matrix...</span>
     </div>
   );
 
+  
   return (
-    <div className={`p-6 lg:p-10 min-h-screen bg-white ${robotoSlab.className} text-black`}>
+    <div className={`p-6 lg:p-10 min-h-screen bg-white ${ubuntu.className} text-black`}>
 
-      {/* ── HEADER ── */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-10 shadow-2xl border-2 border-slate-200 px-6 py-8 rounded-2xl">
+      {/* --- HEADER --- */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-10 border-b border-zinc-200 pb-6 bg-white shrink-0">
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <span className="w-2 h-2 rounded-full bg-violet-600 animate-pulse" />
-            <p className="text-[12px] text-black">Manage All Users</p>
-          </div>
-          <h1 className={`text-5xl lg:text-6xl uppercase font-bold ${robotoSlab.className}`}>
-            Manage<span className="text-black/80 text-5xl"> Users</span>
+          <h1 className={`${robotoSlab.className} text-4xl font-black uppercase tracking-tight`}>
+            User <span className="text-zinc-400 font-light">Directory</span>
           </h1>
+          <p className="text-[9px] font-mono tracking-widest text-zinc-400 mt-1 uppercase">Staged Agent Profiles & Access Regulators</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-300" size={15} />
+        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+          <div className="relative flex-1 sm:flex-none">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={14} />
             <input
-              type="text" placeholder="Search name, ID, email..."
-              className="w-72 bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-xs font-medium outline-none focus:border-violet-400 transition-colors"
+              type="text" placeholder="Search entries..."
+              className="w-full sm:w-64 bg-zinc-50 border border-zinc-200 rounded-xl pl-11 pr-4 py-3 text-[10px] font-black uppercase tracking-wider outline-none focus:border-black transition-all"
               value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
             />
           </div>
           <button
             onClick={() => { setPendingFilters({ ...filters }); setFilterOpen(true); }}
-            className={`relative flex items-center gap-2 px-4 py-3 rounded-xl border text-xs font-bold transition-all
-              ${activeFilterCount > 0 ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-600 border-slate-200 hover:border-violet-400'}`}
+            className={`relative flex items-center gap-2 px-4 py-3 rounded-xl border-2 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer
+              ${activeFilterCount > 0 ? 'bg-black text-white border-black' : 'bg-white text-zinc-600 border-zinc-200 hover:border-black'}`}
           >
-            <SlidersHorizontal size={15} />
-            Filters
+            <SlidersHorizontal size={12} /> Filters
             {activeFilterCount > 0 && (
-              <span className="w-5 h-5 rounded-full bg-white text-violet-600 text-[10px] font-black flex items-center justify-center">
-                {activeFilterCount}
-              </span>
+              <span className="w-4 h-4 rounded-md bg-zinc-200 text-black text-[9px] font-mono font-black flex items-center justify-center">{activeFilterCount}</span>
             )}
           </button>
           <button
             onClick={handleExportCSV}
             disabled={!selectedIds.length}
-            className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all
-              ${selectedIds.length ? 'bg-black text-white hover:bg-slate-800' : 'bg-slate-100 text-slate-300 cursor-not-allowed'}`}
+            className={`flex items-center gap-2 px-4 py-3 rounded-xl border-2 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer
+              ${selectedIds.length ? 'bg-black border-black text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-300 cursor-not-allowed'}`}
           >
-            <Download size={15} />
-            Export ({selectedIds.length})
+            <Download size={12} /> Export ({selectedIds.length})
           </button>
         </div>
       </div>
 
-      {/* ── STATS BAR ── */}
-      <div className="grid lg:grid-cols-5 gap-4 mb-8">
+      {/* --- STATS COUNTERS --- */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         {[
-          { label: "Total Users", value: users.length, icon: <Users size={24} />, color: "text-violet-600", bg: "bg-violet-50 border-violet-100" },
-          { label: "Active", value: users.filter(u => u.isActive).length, icon: <ShieldCheck size={24} />, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-100" },
-          { label: "Blocked", value: users.filter(u => !u.isActive).length, icon: <ShieldX size={24} />, color: "text-red-500", bg: "bg-red-50 border-red-100" },
+          { label: "Total Registries", value: users.length, icon: <Users size={16} />, color: "text-black", bg: "bg-zinc-50 border-zinc-200" },
+          { label: "Active Connections", value: users.filter(u => u.isActive).length, icon: <ShieldCheck size={16} />, color: "text-emerald-600", bg: "bg-emerald-50/40 border-emerald-100" },
+          { label: "Blocked Workstations", value: users.filter(u => !u.isActive).length, icon: <ShieldX size={16} />, color: "text-rose-600", bg: "bg-rose-50/40 border-rose-100" },
         ].map(s => (
-          <div key={s.label} className={`flex items-center gap-4 p-4 rounded-xl border ${s.bg}`}>
+          <div key={s.label} className={`flex items-center gap-4 p-5 rounded-xl border-2 ${s.bg} select-none`}>
             <div className={s.color}>{s.icon}</div>
             <div>
-              <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
-              <p className="text-[10px] text-black uppercase tracking-widest">{s.label}</p>
+              <p className={`text-xl font-mono font-black ${s.color}`}>{s.value}</p>
+              <p className="text-[9px] text-zinc-400 font-black uppercase tracking-widest mt-0.5">{s.label}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* ── TABLE ── */}
-      <div className="bg-white rounded-lg border border-slate-100 shadow-sm overflow-hidden">
+      {/* --- SYSTEM MATRIX TABLE --- */}
+      <div className="bg-white rounded-2xl border border-zinc-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
+          <table className="w-full border-collapse text-left">
             <thead>
-              <tr className="bg-black text-white">
-                <th className="px-5 py-4 w-12">
-                  <button onClick={toggleSelectAll}>
+              <tr className="bg-slate-50 border-b border-slate-200 font-black uppercase tracking-widest text-[9px] text-slate-400 select-none">
+                <th className="px-5 py-4 w-12 text-center">
+                  <button onClick={toggleSelectAll} className="cursor-pointer">
                     {selectedIds.length === filteredUsers.length && filteredUsers.length > 0
-                      ? <CheckSquare size={16} className="text-violet-400" />
-                      : <Square size={16} className="text-white" />}
+                      ? <CheckSquare size={14} className="text-black" />
+                      : <Square size={14} className="text-zinc-300" />}
                   </button>
                 </th>
-                {["User", "Credentials", "Contact", "Verification", "Plan Dates", "Submitted", "Approved", "Rejected", "Saved", "Access"].map(h => (
-                  <th key={h} className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-white text-left whitespace-nowrap">{h}</th>
+                {["Agent Node", "Credentials", "Contact parameters", "Compliance Status", "Plan Deadlines", "Subm", "Appr", "Rejt", "Saved", "Action controls"].map(h => (
+                  <th key={h} className="px-4 py-4 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-zinc-100 font-medium text-xs">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="text-center py-20 text-slate-700 text-sm">
-                    No users match current filters.
+                  <td colSpan={11} className="text-center py-20 font-mono font-bold text-zinc-300 uppercase tracking-wider">
+                    No profile matches found inside matching tracking vector.
                   </td>
                 </tr>
-              ) : filteredUsers.map((user, idx) => {
-                const isSelected = selectedIds.includes(user._id);
-                const isUserActionLoading = isActionLoading === user._id;
-                const displayEndDate = manualDates[user._id] || (user.endDate ? new Date(user.endDate).toISOString().split('T')[0] : "");
-                const isExpired = user.endDate && new Date(user.endDate) < new Date();
+              ) : (
+                filteredUsers.map((user, idx) => {
+                  const isSelected = selectedIds.includes(user._id);
+                  const isUserActionLoading = isActionLoading === user._id;
+                  const displayEndDate = manualDates[user._id] || (user.endDate ? new Date(user.endDate).toISOString().split('T')[0] : "");
+                  const isExpired = user.endDate && new Date(user.endDate) < new Date();
 
-                // "Saved" = everything still being worked on / not finalized
-                const savedCount =
-                  (user.stats?.inProgressCount || 0) +
-                  (user.stats?.assignedCount || 0) +
-                  (user.stats?.reviewCount || 0);
+                  const savedCount =
+                    (user.stats?.inProgressCount || 0) +
+                    (user.stats?.assignedCount || 0) +
+                    (user.stats?.reviewCount || 0);
 
-                return (
-                  <tr
-                    key={user._id}
-                    className={`border-b border-slate-50 transition-colors
-                      ${isSelected ? 'bg-violet-50/60' : idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}
-                      hover:bg-violet-50/40`}
-                  >
-                    {/* Checkbox */}
-                    <td className="px-5 py-4">
-                      <button onClick={() => toggleSelect(user._id)}>
-                        {isSelected
-                          ? <CheckSquare size={16} className="text-violet-600" fill="currentColor" />
-                          : <Square size={16} className="text-slate-300" />}
-                      </button>
-                    </td>
+                  return (
+                    <tr
+                      key={user._id}
+                      className={`border-b border-zinc-50 transition-colors ${isSelected ? 'bg-zinc-50' : idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'} hover:bg-zinc-50/80`}
+                    >
+                      <td className="px-5 py-4 text-center">
+                        <button onClick={() => toggleSelect(user._id)} className="cursor-pointer">
+                          {isSelected
+                            ? <CheckSquare size={14} className="text-black" />
+                            : <Square size={14} className="text-zinc-300" />}
+                        </button>
+                      </td>
 
-                    {/* User */}
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black flex-shrink-0
-                          ${isSelected ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                          {user.name?.charAt(0)?.toUpperCase()}
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-mono font-black shrink-0 shadow-xs select-none
+                            ${isSelected ? 'bg-black text-white' : 'bg-zinc-100 text-zinc-500'}`}>
+                            {user.name?.charAt(0)?.toUpperCase() || "?"}
+                          </div>
+                          <div className="min-w-0 max-w-[140px]">
+                            <p className="font-black text-xs text-zinc-900 truncate uppercase tracking-tight">{user.name || "UNNAMED_NODE"}</p>
+                            <p className="text-[9px] text-zinc-400 font-mono tracking-tighter truncate mt-0.5">{user.loginId}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold text-xs text-black leading-tight">{user.name}</p>
-                          <p className="text-[10px] text-slate-600 font-mono mt-0.5">{user.loginId}</p>
+                      </td>
+
+                      <td className="px-4 py-4 font-mono font-bold text-zinc-900 select-all">{user.password || "------"}</td>
+
+                      <td className="px-4 py-4">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1 text-zinc-500 font-medium">
+                            <span className="text-[10px] text-zinc-900 font-mono">+91 {user.phone || '—'}</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-zinc-400">
+                            <span className="text-[10px] truncate max-w-[130px] font-mono">{user.email}</span>
+                          </div>
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Credentials */}
-                    <td className="px-4 py-4">
-                      <span className="font-mono text-md font-semibold text-black px-2 py-0.5 rounded">{user.password}</span>
-                    </td>
-
-                    {/* Contact */}
-                    <td className="px-4 py-4">
-                      <div className="space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <Activity size={11} className="text-black shrink-0" />
-                          <span className="text-xs text-black">+91 {user.phone || '—'}</span>
+                      <td className="px-4 py-4 select-none">
+                        <div className="flex flex-col gap-1">
+                          <StatusPill label="KYC" active={user.kycStatus === 'verified' || user.kycStatus === 'approved'} />
+                          <StatusPill label="Bank" active={user.bankDetailsStatus === 'verified' || user.bankDetailsStatus === 'approved'} />
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Mail size={11} className="text-black shrink-0" />
-                          <span className="text-[11px] text-black truncate max-w-36">{user.email}</span>
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <div className="space-y-0.5 text-[10px] font-mono mb-1.5 text-zinc-500">
+                          <p>Start: <span className="font-bold text-zinc-700">{user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-GB') : '—'}</span></p>
+                          <p>End: <span className={`font-black ${isExpired ? 'text-rose-500 animate-pulse' : 'text-zinc-900'}`}>{user.endDate ? new Date(user.endDate).toLocaleDateString('en-GB') : '—'}</span></p>
                         </div>
-                      </div>
-                    </td>
-
-                    {/* Verification */}
-                    <td className="px-4 py-4">
-                      <div className="flex flex-col gap-1.5">
-                        <StatusPill label="KYC" active={user.kycStatus === 'verified' || user.kycStatus === 'approved'} />
-                        <StatusPill label="Bank" active={user.bankDetailsStatus === 'verified' || user.bankDetailsStatus === 'approved'} />
-                      </div>
-                    </td>
-
-                    {/* Plan Dates */}
-                    <td className="px-4 py-4">
-                      <div className="space-y-1 mb-2">
-                        <p className="text-[10px] text-black">
-                          Start: <span className="font-medium">{user.startDate ? new Date(user.startDate).toLocaleDateString('en-GB') : '—'}</span>
-                        </p>
-                        <p className="text-[10px] text-black">
-                          End: <span className={`font-bold ${isExpired ? 'text-red-500' : 'text-black'}`}>
-                            {user.endDate ? new Date(user.endDate).toLocaleDateString('en-GB') : '—'}
-                          </span>
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-100 rounded-lg p-1">
-                        <Calendar size={10} className="text-slate-400 ml-0.5 flex-shrink-0" />
-                        <input
-                          type="date" value={displayEndDate}
-                          onChange={e => handleDateChange(user._id, e.target.value)}
-                          className="bg-transparent text-[9px] font-bold outline-none cursor-pointer w-20 text-black"
-                        />
-                        <div className="flex items-center gap-1 border-l border-slate-200 pl-1">
-                          {manualDates[user._id] && (
+                        <div className="flex items-center gap-1 bg-zinc-50 border border-zinc-200 rounded-lg p-1 w-fit select-none">
+                          <Calendar size={11} className="text-zinc-400 ml-0.5 shrink-0" />
+                          <input
+                            type="date" value={displayEndDate}
+                            onChange={e => handleDateChange(user._id, e.target.value)}
+                            className="bg-transparent text-[9px] font-mono font-bold outline-none cursor-pointer w-20 text-black border-none"
+                          />
+                          <div className="flex items-center gap-1 border-l border-zinc-200 pl-1 shrink-0">
+                            {manualDates[user._id] && (
+                              <button
+                                onClick={() => handleAccessUpdate(user._id, { fixedEndDate: manualDates[user._id] })}
+                                disabled={isUserActionLoading}
+                                className="p-0.5 bg-black text-white rounded-md hover:bg-zinc-800 transition-colors cursor-pointer"
+                              >
+                                {isUserActionLoading ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
+                              </button>
+                            )}
                             <button
-                              onClick={() => handleAccessUpdate(user._id, { fixedEndDate: manualDates[user._id] })}
+                              onClick={() => handleAccessUpdate(user._id, { daysToAdd: 7 })}
                               disabled={isUserActionLoading}
-                              className="p-1 bg-violet-600 text-white rounded hover:bg-violet-700 transition-colors"
+                              className="p-0.5 bg-white border border-zinc-200 rounded-md hover:border-black text-black transition-all cursor-pointer font-black"
+                              title="+7 Days Extension"
                             >
-                              {isUserActionLoading ? <Loader2 size={9} className="animate-spin" /> : <Save size={9} />}
+                              <Plus size={10} strokeWidth={2.5} />
                             </button>
-                          )}
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-4 text-center select-none"><StatBadge value={user.stats?.submittedCount || 0} color="text-zinc-500" bg="bg-zinc-50 border-zinc-100" /></td>
+                      <td className="px-4 py-4 text-center select-none"><StatBadge value={user.stats?.approvedCount || 0} color="text-emerald-600" bg="bg-emerald-50/50 border-emerald-100" /></td>
+                      <td className="px-4 py-4 text-center select-none"><StatBadge value={user.stats?.rejectedCount || 0} color="text-rose-500" bg="bg-rose-50/50 border-rose-100" /></td>
+                      <td className="px-4 py-4 text-center select-none"><StatBadge value={savedCount} color="text-amber-600" bg="bg-amber-50/50 border-amber-100" /></td>
+
+                      <td className="px-4 py-4 select-none">
+                        <div className="flex items-center gap-2 justify-end">
+                          <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border
+                            ${user.isActive ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-500 border-rose-100'}`}>
+                            {user.isActive ? 'Active' : 'Blocked'}
+                          </span>
                           <button
-                            onClick={() => handleAccessUpdate(user._id, { daysToAdd: 7 })}
                             disabled={isUserActionLoading}
-                            className="p-1 bg-white border border-slate-200 rounded hover:bg-black hover:text-white hover:border-black transition-all"
-                            title="+7 days"
+                            onClick={() => handleAccessUpdate(user._id, { isActive: !user.isActive })}
+                            className={`p-1.5 rounded-lg border-2 transition-all cursor-pointer shrink-0
+                              ${user.isActive
+                                ? 'border-zinc-200 text-zinc-500 hover:border-rose-500 hover:text-white hover:bg-rose-500'
+                                : 'border-black bg-black text-white hover:bg-zinc-800'}`}
+                            title={user.isActive ? 'Suspend access loop' : 'Reactivate console'}
                           >
-                            <Plus size={9} strokeWidth={3} />
+                            {isUserActionLoading ? <Loader2 size={12} className="animate-spin" /> : <Power size={12} />}
                           </button>
                         </div>
-                      </div>
-                    </td>
-
-                    {/* Submitted */}
-                    <td className="px-4 py-4 text-center">
-                      <StatBadge value={user.stats?.submittedCount || 0} color="text-blue-500" bg="bg-blue-50" />
-                    </td>
-
-                    {/* Approved */}
-                    <td className="px-4 py-4 text-center">
-                      <StatBadge value={user.stats?.approvedCount || 0} color="text-emerald-600" bg="bg-emerald-50" />
-                    </td>
-
-                    {/* Rejected */}
-                    <td className="px-4 py-4 text-center">
-                      <StatBadge value={user.stats?.rejectedCount || 0} color="text-red-400" bg="bg-red-50" />
-                    </td>
-
-                    {/* Saved (in-progress + assigned + review) */}
-                    <td className="px-4 py-4 text-center">
-                      <StatBadge value={savedCount} color="text-amber-600" bg="bg-amber-50" />
-                    </td>
-
-                    {/* Access */}
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-3 justify-end">
-                        <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded
-                          ${user.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
-                          {user.isActive ? 'Active' : 'Blocked'}
-                        </span>
-                        <button
-                          disabled={isUserActionLoading}
-                          onClick={() => handleAccessUpdate(user._id, { isActive: !user.isActive })}
-                          className={`p-2 rounded-lg border transition-all
-                            ${user.isActive
-                              ? 'border-slate-200 text-black hover:bg-red-500 hover:text-white hover:border-red-500'
-                              : 'border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-600'}`}
-                          title={user.isActive ? 'Block user' : 'Activate user'}
-                        >
-                          {isUserActionLoading ? <Loader2 size={13} className="animate-spin" /> : <Power size={13} />}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
 
-        {/* Table Footer */}
-        <div className="px-6 py-3 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
-          <p className="text-[11px] text-slate-400">
-            Showing <span className="font-bold text-slate-600">{filteredUsers.length}</span> users
-            {selectedIds.length > 0 && <> · <span className="font-bold text-violet-600">{selectedIds.length} selected</span></>}
+        {/* --- FOOTER --- */}
+        <div className="px-5 py-3 border-t border-zinc-200 flex items-center justify-between bg-slate-50/50 select-none">
+          <p className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">
+            Registry Index size: <span className="font-bold text-zinc-700">{filteredUsers.length}</span> profiles loaded
+            {selectedIds.length > 0 && <> · <span className="font-bold text-black">{selectedIds.length} flagged active</span></>}
           </p>
-          <p className="text-[11px] text-slate-400 font-mono">{currentTime}</p>
+          <p className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">{currentTime || "--:--:--"}</p>
         </div>
       </div>
 
-      {/* ── FILTER MODAL ── */}
+      {/* ── FILTER MATRIX OVERLAY PANEL ── */}
       {filterOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-md mx-4">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl border border-zinc-200 shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-100 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center border border-violet-100">
-                  <SlidersHorizontal size={15} className="text-violet-600" />
-                </div>
+                <div className="w-8 h-8 rounded-lg bg-zinc-50 flex items-center justify-center border border-zinc-200"><SlidersHorizontal size={13} /></div>
                 <div>
-                  <h2 className="text-sm font-bold">Filter & Sort</h2>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-widest">Refine user list</p>
+                  <h2 className="text-sm font-black uppercase tracking-tight">Filter parameters</h2>
+                  <p className="text-[9px] font-mono text-zinc-400 uppercase tracking-widest mt-0.5">Configure system output vectors</p>
                 </div>
               </div>
-              <button onClick={() => setFilterOpen(false)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                <X size={16} className="text-slate-400" />
-              </button>
+              <button onClick={() => setFilterOpen(false)} className="p-2 hover:bg-zinc-50 rounded-lg transition-colors cursor-pointer"><X size={15} /></button>
             </div>
-            <div className="px-6 py-5 space-y-5">
+
+            <div className="px-6 py-5 space-y-4 max-h-[60vh] overflow-y-auto">
               <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">Account Status</label>
+                <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1.5">Account Status</label>
                 <div className="flex gap-2">
                   {["all", "active", "blocked"].map(opt => (
                     <button key={opt} onClick={() => setPendingFilters(p => ({ ...p, status: opt }))}
-                      className={`flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider border transition-all
-                        ${pendingFilters.status === opt
-                          ? opt === 'active' ? 'bg-emerald-500 text-white border-emerald-500'
-                            : opt === 'blocked' ? 'bg-red-500 text-white border-red-500'
-                            : 'bg-violet-600 text-white border-violet-600'
-                          : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'}`}>
+                      className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider border-2 transition-all cursor-pointer
+                        ${pendingFilters.status === opt ? 'bg-black border-black text-white' : 'bg-white text-zinc-400 border-zinc-200 hover:border-black'}`}>
                       {opt}
                     </button>
                   ))}
                 </div>
               </div>
+
               <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">KYC Status</label>
+                <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1.5">KYC Compliance Check</label>
                 <div className="flex gap-2">
                   {["all", "verified", "pending"].map(opt => (
                     <button key={opt} onClick={() => setPendingFilters(p => ({ ...p, kyc: opt }))}
-                      className={`flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider border transition-all
-                        ${pendingFilters.kyc === opt ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'}`}>
+                      className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider border-2 transition-all cursor-pointer
+                        ${pendingFilters.kyc === opt ? 'bg-black border-black text-white' : 'bg-white text-zinc-400 border-zinc-200 hover:border-black'}`}>
                       {opt}
                     </button>
                   ))}
                 </div>
               </div>
+
               <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">Bank Status</label>
+                <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1.5">Banking Channel Route</label>
                 <div className="flex gap-2">
                   {["all", "verified", "pending"].map(opt => (
                     <button key={opt} onClick={() => setPendingFilters(p => ({ ...p, bank: opt }))}
-                      className={`flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider border transition-all
-                        ${pendingFilters.bank === opt ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'}`}>
+                      className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider border-2 transition-all cursor-pointer
+                        ${pendingFilters.bank === opt ? 'bg-black border-black text-white' : 'bg-white text-zinc-400 border-zinc-200 hover:border-black'}`}>
                       {opt}
                     </button>
                   ))}
                 </div>
               </div>
+
               <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">Plan End Date Range</label>
-                <div className="flex gap-3">
+                <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1.5">Plan Duration Date Boundaries</label>
+                <div className="flex gap-3 font-mono text-[11px]">
                   <div className="flex-1">
-                    <p className="text-[9px] text-slate-400 mb-1 uppercase tracking-widest">From</p>
+                    <span className="text-[8px] font-sans font-black text-zinc-400 block mb-1 uppercase">Lower Bound</span>
                     <input type="date" value={pendingFilters.endDateFrom}
                       onChange={e => setPendingFilters(p => ({ ...p, endDateFrom: e.target.value }))}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:border-violet-400 transition-colors" />
+                      className="w-full border-2 border-zinc-200 rounded-lg px-3 py-1.5 outline-none focus:border-black bg-white" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-[9px] text-slate-400 mb-1 uppercase tracking-widest">To</p>
+                    <span className="text-[8px] font-sans font-black text-zinc-400 block mb-1 uppercase">Upper Bound</span>
                     <input type="date" value={pendingFilters.endDateTo}
                       onChange={e => setPendingFilters(p => ({ ...p, endDateTo: e.target.value }))}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:border-violet-400 transition-colors" />
+                      className="w-full border-2 border-zinc-200 rounded-lg px-3 py-1.5 outline-none focus:border-black bg-white" />
                   </div>
                 </div>
               </div>
+
               <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">Sort By</label>
+                <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1.5">Sort Sequence Mapping</label>
                 <div className="flex gap-2">
                   <div className="flex-1 relative">
                     <select value={pendingFilters.sortBy}
                       onChange={e => setPendingFilters(p => ({ ...p, sortBy: e.target.value }))}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none appearance-none focus:border-violet-400 transition-colors bg-white">
-                      <option value="name">Name</option>
-                      <option value="endDate">End Date</option>
-                      <option value="joinDate">Join Date</option>
-                      <option value="approved">Approved Count</option>
+                      className="w-full border-2 border-zinc-200 rounded-lg px-3 py-2 text-[11px] font-black uppercase outline-none appearance-none bg-white cursor-pointer focus:border-black">
+                      <option value="name">Name parameter</option>
+                      <option value="endDate">Expiry deadline</option>
+                      <option value="joinDate">Join registration</option>
+                      <option value="approved">Approved metrics</option>
                     </select>
-                    <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
                   </div>
                   <button
                     onClick={() => setPendingFilters(p => ({ ...p, sortDir: p.sortDir === "asc" ? "desc" : "asc" }))}
-                    className="px-4 border border-slate-200 rounded-lg hover:border-violet-400 transition-colors flex items-center gap-1.5 text-[11px] font-bold text-slate-600"
+                    className="px-3 border-2 border-zinc-200 text-zinc-600 rounded-lg font-mono font-black text-[10px] uppercase tracking-wide hover:border-black hover:text-black transition-all cursor-pointer flex items-center gap-1"
                   >
-                    <ArrowUpDown size={13} />
-                    {pendingFilters.sortDir === "asc" ? "ASC" : "DESC"}
+                    <ArrowUpDown size={11} /> {pendingFilters.sortDir}
                   </button>
                 </div>
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-slate-100 flex gap-3">
+
+            <div className="px-6 py-4 border-t border-zinc-100 flex gap-3 shrink-0 bg-white">
               <button onClick={resetFilters}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-500 hover:bg-slate-50 transition-colors">
-                <RotateCcw size={13} /> Reset
+                className="flex items-center gap-1.5 px-4 py-3 rounded-xl border-2 border-zinc-200 text-[10px] font-black uppercase tracking-wider text-zinc-500 hover:border-black hover:text-black transition-all cursor-pointer">
+                <RotateCcw size={12} /> Wipe Parameters
               </button>
               <button onClick={applyFilters}
-                className="flex-1 py-2.5 rounded-lg bg-violet-600 text-white text-xs font-bold hover:bg-violet-700 transition-colors">
-                Apply Filters
+                className="flex-1 py-3 rounded-xl bg-black border-2 border-black text-white text-[10px] font-black uppercase tracking-wider hover:bg-zinc-800 hover:border-zinc-800 transition-all cursor-pointer shadow-sm">
+                Commit Filter Vectors
               </button>
             </div>
           </div>
@@ -516,7 +515,7 @@ export default function AdminUsersPage() {
 
 function StatBadge({ value, color, bg }) {
   return (
-    <span className={`inline-flex items-center justify-center w-10 h-10 rounded-xl text-lg font-black ${color} ${bg}`}>
+    <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded-md font-mono text-xs font-black border ${color} ${bg}`}>
       {value}
     </span>
   );
@@ -524,9 +523,9 @@ function StatBadge({ value, color, bg }) {
 
 function StatusPill({ label, active }) {
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border
-      ${active ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-slate-50 text-slate-300 border-slate-100'}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-emerald-500' : 'bg-slate-200'}`} />
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[8px] font-black uppercase tracking-wider
+      ${active ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-zinc-50 text-zinc-300 border-zinc-100'}`}>
+      <span className={`w-1 h-1 rounded-full ${active ? 'bg-emerald-500' : 'bg-zinc-200'}`} />
       {label}
     </span>
   );

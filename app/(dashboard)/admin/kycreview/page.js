@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getAllKycRequests, updateComplianceStatus } from "@/app/actions/admin";
-import {  X, Eye,CheckCheck, Landmark, ShieldCheck, Search, Loader2, UserCheck, SquareArrowRightEnter, Undo2, CloudDownload } from "lucide-react";
-
+import { X, CheckCheck, Landmark, ShieldCheck, Search, Loader2, UserCheck, SquareArrowRightEnter, Undo2, CloudDownload, FileText } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import { robotoSlab } from "@/lib/fonts";
 
@@ -12,7 +11,7 @@ export default function KycReviewPage() {
   const [loading, setLoading] = useState(true);
   const [viewTab, setViewTab] = useState("pending");
   const [searchTerm, setSearchTerm] = useState("");
-  const [modal, setModal] = useState({ show: false, type: null, data: null, reqId: null });
+  const [modal, setModal] = useState({ show: false, type: null, data: null, reqId: null, previewUrl: null });
 
   useEffect(() => { loadRequests(); }, []);
 
@@ -34,17 +33,21 @@ export default function KycReviewPage() {
     return viewTab === "pending" ? (matchesSearch && isPending) : (matchesSearch && isVerified);
   });
 
-
   const handleAction = async (status) => {
     const { reqId, type } = modal;
     const res = await updateComplianceStatus(reqId, type, status);
     if (res.success) {
       toast.success(`SYSTEM: ${type.toUpperCase()} set to ${status.toUpperCase()}`);
-      setModal({ show: false, type: null, data: null, reqId: null });
+      setModal({ show: false, type: null, data: null, reqId: null, previewUrl: null });
       loadRequests();
     } else {
       toast.error(res.error);
     }
+  };
+
+  const isImageFile = (url) => {
+    if (!url) return false;
+    return url.match(/\.(jpeg|jpg|gif|png|webp)/i) != null || url.includes("image/upload");
   };
 
   if (loading) return (
@@ -70,7 +73,6 @@ export default function KycReviewPage() {
         </div>
 
         <div className="flex flex-col md:flex-row items-center gap-4 w-full xl:w-auto">
-          {/* Search Field */}
           <div className="relative w-full md:w-72">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={14} />
             <input
@@ -81,7 +83,6 @@ export default function KycReviewPage() {
             />
           </div>
 
-          {/* Toggle Buttons (Now on the Right) */}
           <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
             {["pending", "verified"].map((tab) => (
               <button
@@ -96,7 +97,7 @@ export default function KycReviewPage() {
         </div>
       </div>
 
-      {/* --- REFINED TABLE (Image Reference Style) --- */}
+      {/* --- REFINED TABLE --- */}
       <div className="space-y-4">
         {filteredData.length === 0 ? (
           <div className="py-20 text-center border-2 border-dashed border-slate-100">
@@ -105,11 +106,8 @@ export default function KycReviewPage() {
         ) : (
           filteredData.map((req, index) => (
             <div key={req._id} className="group bg-white border border-slate-200 shadow-xl rounded-md  p-6  flex flex-wrap md:flex-nowrap items-center justify-between gap-6 transition-all">
-
               <div className="flex items-center gap-8 flex-1">
-                {/* S.No with custom styling from image */}
                 <span className="text-lg font-black text-slate-900 w-6  group-hover:text-violet-600">{index + 1}</span>
-
                 <div className="flex items-center gap-5">
                   <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-violet-600 group-hover:text-white transition-colors">
                     <UserCheck size={20} />
@@ -121,39 +119,33 @@ export default function KycReviewPage() {
                 </div>
               </div>
 
-              {/* Action Buttons styled like 'Continue' button from image */}
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setModal({ show: true, type: 'kyc', data: req.documents, reqId: req._id })}
+                  onClick={() => setModal({ show: true, type: 'kyc', data: req.documents, reqId: req._id, previewUrl: req.documents?.idProof?.fileUrl })}
                   className={`px-6 py-3 rounded-full text-[12px] cursor-pointer font-black uppercase tracking-widest border transition-all flex items-center gap-2 ${req.documents?.status === 'verified' ? 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-800 hover:text-white' : 'bg-white text-black border-slate-100 hover:bg-black hover:text-white'}`}
                 >
                   <ShieldCheck size={14} /> KYC {req.documents?.status === 'verified' && <span className="text-[8px]  ">(Verified)</span>}
                 </button>
 
                 <button
-                  onClick={() => setModal({ show: true, type: 'bank', data: req.bankDetails, reqId: req._id })}
+                  onClick={() => setModal({ show: true, type: 'bank', data: req.bankDetails, reqId: req._id, previewUrl: null })}
                   className={`px-6 py-3 rounded-full text-[12px] cursor-pointer font-black uppercase tracking-widest border transition-all flex items-center gap-2 ${req.bankDetails?.status === 'verified' ? 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-800 hover:text-white' : 'bg-white text-black border-slate-100 hover:bg-black hover:text-white'}`}
                 >
                   <Landmark size={14} /> Bank {req.bankDetails?.status === 'verified' && <span className="text-[8px] ">(Verified)</span>}
                 </button>
-
                 <div className="h-8 w-[1px] bg-slate-100 mx-2 hidden md:block" />
-
-
               </div>
             </div>
           ))
         )}
       </div>
 
-      {/* --- REVIEW MODAL (IDENTICAL TO PREVIOUS LOGIC) --- */}
+      {/* --- REVIEW MODAL --- */}
       {modal.show && (
         <div className="fixed inset-0 z-[100]  flex items-center justify-center bg-black backdrop-blur-sm p-4 animate-in fade-in duration-300">
-
-          {/* Dynamic Width: max-w-lg for Bank, max-w-6xl for KYC */}
           <div className={`bg-white  w-full h-[85vh] shadow-2xl border-2 border-white flex overflow-hidden transition-all duration-500 ${modal.type === 'bank' ? 'max-w-lg' : 'max-w-6xl'}`}>
 
-            {/* --- LEFT PANEL: DATA & ACTIONS --- */}
+            {/* --- LEFT PANEL --- */}
             <div className={`p-10 flex flex-col bg-white h-full ${modal.type === 'kyc' ? 'w-full md:w-[35%] border-r-4 border-black' : 'w-full'}`}>
               <div className="flex justify-between items-center mb-10">
                 <div>
@@ -165,10 +157,8 @@ export default function KycReviewPage() {
                 ><Undo2 size={20} /></button>
               </div>
 
-              {/* Data Fields Section */}
               <div className="flex-1 space-y-4 overflow-y-auto pr-2 custom-scrollbar">
                 {modal.type === 'kyc' ? (
-                  /* Identity View with Preview Buttons */
                   <div className="space-y-4">
                     <div className="flex justify-between text-[14px]  pb-2">
                       <span className="text-black">ID PROOF </span>
@@ -182,10 +172,7 @@ export default function KycReviewPage() {
                       onClick={() => setModal({ ...modal, previewUrl: modal.data.idProof?.fileUrl })}
                       className="w-full py-4 flex items-center justify-center gap-3 cursor-pointer bg-violet-50 text-violet-600 text-[10px] font-black uppercase rounded-2xl border-2 border-violet-100 transition-all hover:bg-violet-600 hover:text-white shadow-sm group"
                     >
-                      <SquareArrowRightEnter
-                        size={18}
-                        className="transition-transform group-hover:translate-x-1"
-                      />
+                      <SquareArrowRightEnter size={18} className="transition-transform group-hover:translate-x-1" />
                       Load ID Preview
                     </button>
                     <div className="h-6" />
@@ -200,17 +187,13 @@ export default function KycReviewPage() {
                     </div>
                     <button
                       onClick={() => setModal({ ...modal, previewUrl: modal.data.addressProof?.fileUrl })}
-                    className="w-full py-4 flex items-center justify-center gap-3 cursor-pointer bg-violet-50 text-violet-600 text-[10px] font-black uppercase rounded-2xl border-2 border-violet-100 transition-all hover:bg-violet-600 hover:text-white shadow-sm group"
+                      className="w-full py-4 flex items-center justify-center gap-3 cursor-pointer bg-violet-50 text-violet-600 text-[10px] font-black uppercase rounded-2xl border-2 border-violet-100 transition-all hover:bg-violet-600 hover:text-white shadow-sm group"
                     >
-                      <SquareArrowRightEnter
-                        size={18}
-                        className="transition-transform group-hover:translate-x-1"
-                      />
+                      <SquareArrowRightEnter size={18} className="transition-transform group-hover:translate-x-1" />
                       Load Address ID Preview
                     </button>
                   </div>
                 ) : (
-                  /* Bank View: Straight Simple List */
                   <div className="space-y-4">
                     {[
                       { l: "HOLDER NAME", v: modal.data.data?.accountHolderName },
@@ -230,51 +213,49 @@ export default function KycReviewPage() {
                 )}
               </div>
 
-              {/* Action Buttons */}
-            
+              <div className="flex gap-4 pt-8 border-t-4 border-black mt-6">
+                <button 
+                  onClick={() => handleAction('rejected')} 
+                  className="group relative flex-1 py-5 overflow-hidden rounded-md cursor-pointer bg-white text-[10px] font-black uppercase tracking-widest text-rose-600 transition-all duration-300"
+                >
+                  <span className="absolute inset-0 top-0 left-full z-0 h-full w-full bg-rose-600 transition-all duration-500 ease-out group-hover:left-0" />
+                  <div className="relative z-10 flex items-center justify-center gap-2 group-hover:text-white transition-colors duration-300">
+                    <X size={16} /> Reject 
+                  </div>
+                </button>
 
-<div className="flex gap-4 pt-8 border-t-4 border-black mt-6">
-  {/* REJECT BUTTON - Red Slide-in */}
-  <button 
-    onClick={() => handleAction('rejected')} 
-    className="group relative flex-1 py-5 overflow-hidden rounded-md cursor-pointer   bg-white text-[10px] font-black uppercase tracking-widest text-rose-600 transition-all duration-300"
-  >
-    {/* Slide-in Background Layer */}
-    <span className="absolute inset-0 top-0 left-full z-0 h-full w-full bg-rose-600 transition-all duration-500 ease-out group-hover:left-0" />
-    
-    {/* Content - Relative z-10 to stay above the slide-in bg */}
-    <div className="relative z-10 flex items-center justify-center gap-2 group-hover:text-white transition-colors duration-300">
-      <X size={16} />
-      Reject 
-    </div>
-  </button>
-
-  {/* APPROVE BUTTON - Green Slide-in */}
-  <button 
-    onClick={() => handleAction('verified')} 
-    className="group relative flex-1 py-5 overflow-hidden rounded-md cursor-pointer  bg-white text-[10px] font-black uppercase tracking-widest text-emerald-600 transition-all duration-300 shadow-xl shadow-emerald-50"
-  >
-    {/* Slide-in Background Layer */}
-    <span className="absolute inset-0 top-0 left-full z-0 h-full w-full bg-emerald-600 transition-all duration-500 ease-out group-hover:left-0" />
-    
-    {/* Content */}
-    <div className="relative z-10 flex items-center justify-center gap-2 group-hover:text-white transition-colors duration-300">
-      <CheckCheck size={16} />
-      Approve
-    </div>
-  </button>
-</div>
+                <button 
+                  onClick={() => handleAction('verified')} 
+                  className="group relative flex-1 py-5 overflow-hidden rounded-md cursor-pointer bg-white text-[10px] font-black uppercase tracking-widest text-emerald-600 transition-all duration-300 shadow-xl shadow-emerald-50"
+                >
+                  <span className="absolute inset-0 top-0 left-full z-0 h-full w-full bg-emerald-600 transition-all duration-500 ease-out group-hover:left-0" />
+                  <div className="relative z-10 flex items-center justify-center gap-2 group-hover:text-white transition-colors duration-300">
+                    <CheckCheck size={16} /> Approve
+                  </div>
+                </button>
+              </div>
             </div>
 
-            {/* --- RIGHT PANEL: PREVIEW (Only for KYC) --- */}
+            {/* --- RIGHT PANEL: SECURE PROXIED VIEW WINDOW --- */}
             {modal.type === 'kyc' && (
               <div className="hidden md:flex flex-1 bg-black relative">
                 {modal.previewUrl ? (
-                  <iframe
-                    src={`https://docs.google.com/gview?url=${modal.previewUrl}&embedded=true`}
-                    className="w-full h-full border-none bg-white"
-                    title="Viewer"
-                  />
+                  isImageFile(modal.previewUrl) ? (
+                    <div className="w-full h-full p-8 flex items-center justify-center bg-zinc-950">
+                      <img 
+                        src={modal.previewUrl} 
+                        alt="Proof Preview" 
+                        className="max-w-full max-h-full object-contain border border-zinc-800 shadow-2xl"
+                      />
+                    </div>
+                  ) : (
+                    /* ✅ PROXIED STREAM MATRIX: Feeds data from the secure API proxy, eliminating domain blocking errors permanently */
+                    <iframe
+                      src={`/api/proxy-pdf?url=${encodeURIComponent(modal.previewUrl)}`}
+                      className="w-full h-full border-none bg-white"
+                      title="Viewer"
+                    />
+                  )
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center p-20 text-center space-y-6">
                     <div className="w-20 h-20 bg-white/5 flex items-center justify-center border-2 border-white/10 animate-pulse">
@@ -285,6 +266,7 @@ export default function KycReviewPage() {
                 )}
               </div>
             )}
+
           </div>
         </div>
       )}

@@ -1,3 +1,4 @@
+import { create } from 'zustand'; // <-- ADD THIS LINE
 // store/useAdminStore.js
 export const useAdminStore = create((set) => ({
   masterPool: [], // Saare 'Resume' Master entries
