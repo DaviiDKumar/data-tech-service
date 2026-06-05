@@ -36,14 +36,32 @@ export default function KYCVerificationPage() {
     return () => { active = false; cancelAnimationFrame(frame); };
   }, [user?.id]);
 
-  const handleKycSubmit = async (e) => {
+ const handleKycSubmit = async (e) => {
     e.preventDefault();
+    
+    // Guard conditions: Ensure files exist if not already archived on the server
+    if (!kycRecord?.documents?.idProof?.fileUrl && !idFile) {
+      return toast.error("Please select a valid ID Proof PDF document.");
+    }
+    if (!kycRecord?.documents?.addressProof?.fileUrl && !addrFile) {
+      return toast.error("Please select a valid Address Proof PDF document.");
+    }
+
     const formData = new FormData(e.currentTarget);
     
+    // ✅ FIX: Manually inject the React state file references into your formData structure
+    if (idFile) formData.set("idFile", idFile);
+    if (addrFile) formData.set("addrFile", addrFile);
+
     startTransition(async () => {
       const res = await submitKycWithFiles(user?.id, formData);
       if (res.success) {
         toast.success("Identity records synchronized.");
+        
+        // Reset state values cleanly
+        setIdFile(null);
+        setAddrFile(null);
+        
         const updated = await getKycRecord(user?.id);
         if (updated.success) setKycRecord(updated.data);
       } else {

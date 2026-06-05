@@ -21,15 +21,20 @@ export default function UserDashboard() {
   const endDate = user?.endDate;
   const loginId = user?.loginId;
 
-  // ── DYNAMIC METRICS PARSING DIRECTLY FROM STORE NODE ──
-  // Keeps UI clean, highly synchronized, and lightning fast with zero redundant re-fetching loops
+  // ── ⚡ FIXED DYNAMIC METRICS PARSING DIRECTLY FROM STORE NODE ──
+  // Keeps UI clean, highly synchronized, and perfectly balanced against the backend ledger keys
   const metrics = useMemo(() => {
     const submitted = user?.stats?.submittedCount ?? 0;
-    const saved = user?.stats?.savedCount ?? 0;
     const approved = user?.stats?.approvedCount ?? 0;
-    const reassigned = user?.stats?.assignedCount ?? 0;
-    // All-time successfully formatted data clusters
-    const totalCompleted = submitted + saved + approved + reassigned;
+    const assigned = user?.stats?.assignedCount ?? 0; // Maps perfectly to backend Schema key
+    const review = user?.stats?.reviewCount ?? 0;
+    const rejected = user?.stats?.rejectedCount ?? 0;
+    const inProgress = user?.stats?.inProgressCount ?? 0;
+    const saved = user?.stats?.savedCount ?? 0; // Optional: If you want to include saved drafts in metrics, otherwise ignore this line and variable
+
+    // ✅ FIXED TOTAL: Summing all valid database counts ensures that your ledger
+    // remains completely flat when a resume transitions status (e.g. re-assigned -> submitted)
+    const totalCompleted = submitted + approved + assigned + review + rejected + inProgress + saved;
     const todayCompleted = user?.stats?.todayCompletedCount ?? 0;
 
     // Fixed internal billing parameter matrix
@@ -162,7 +167,7 @@ export default function UserDashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-12">
           <StatCard label="Resumes Completed Today" value={metrics.today} subLabel="Daily Productivity" variant="violet" icon={<CheckCheck size={22} />} />
           <StatCard label="Total Estimated Earnings" value={`₹ ${metrics.earnings}`} subLabel="Based on work logs" variant="green" icon={<IndianRupee size={22} />} />
-          <StatCard label="Total Resumes Completed" value={metrics.total} subLabel="All time (Saved + Submitted)" variant="red" icon={<TrendingUp size={22} />} />
+          <StatCard label="Total Resumes Completed" value={metrics.total} subLabel="All time (Total Ledger Balance)" variant="red" icon={<TrendingUp size={22} />} />
           <StatCard label="Joining Bonus" value="₹ 2000" subLabel="After 500 accurate resumes" variant="orange" icon={<SquareCheckBig size={22} />} />
         </div>
 

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
   Loader2, Zap, Search, Square, CheckSquare,
   MousePointer2, ArrowRight, ShieldCheck, Lock,
-  ChevronLeft, ChevronRight, CheckCheck, X, Users, Database
+  ChevronLeft, ChevronRight, CheckCheck, X, Users, Database, Hash
 } from "lucide-react";
 
 const RESUME_PAGE_SIZE = 20;
@@ -17,21 +17,25 @@ export default function AdminReassignPage() {
   const [users, setUsers] = useState([]);
   const [resumes, setResumes] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
+
+  // Cart Cache Array holding all accumulative selections across multiple sequential lookups
   const [selectedResumes, setSelectedResumes] = useState([]);
+
+  // Custom numeric input allocation state
+  const [customSelectCount, setCustomSelectCount] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [resumesLoading, setResumesLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Isolated multi-search states
+  // Search parameters matching target operator strings and submitted origins
   const [userSearchTerm, setUserSearchTerm] = useState("");
   const [resumeSearchTerm, setResumeSearchTerm] = useState("");
 
-  // Independent Double-Tier pagination counters
   const [userCurrentPage, setUserCurrentPage] = useState(1);
   const [resumeCurrentPage, setResumeCurrentPage] = useState(1);
 
-  // ── Load users on mount ───────────────────────────────────────────
+  // 1. Initial Identity Fetch
   useEffect(() => {
     async function init() {
       try {
@@ -40,35 +44,42 @@ export default function AdminReassignPage() {
       } catch (err) {
         toast.error("Failed to connect to authentication server pool.");
       } finally {
-        setLoading(false);
+        loading && setLoading(false);
       }
     }
     init();
-  }, []);
+  }, [loading]);
 
-  // ── Load resumes when a user is selected ─────────────────────────
+  // 2. Fetch Data Pool on Target Select - Keeps cart cache alive!
+  // ── DIAGNOSTIC RESUME POOL STREAM SYNC ─────────────────────────
   const handleUserSelect = async (user) => {
     if (selectedUser?._id === user._id) return;
     setSelectedUser(user);
-    setSelectedResumes([]);
     setResumeCurrentPage(1);
     setResumeSearchTerm("");
     setResumesLoading(true);
+
     try {
       const res = await getReassignableResumes(user._id);
       if (res.success) {
+        // ⚡ DIAGNOSTIC CONSOLE LOG: Look at this output inside your Browser DevTools (F12)
+        console.log("🔥 [DTS DATA DEEP-DIVE] Incoming Resume Object Keys:", {
+          sampleRecord: res.data && res.data.length > 0 ? res.data[0] : "Empty Pool Array",
+          availableKeys: res.data && res.data.length > 0 ? Object.keys(res.data[0]) : []
+        });
+
         setResumes(res.data);
       } else {
         toast.error("Failed to sync resume pool data streams.");
       }
     } catch (err) {
+      console.error("❌ Diagnostic Communication Failure:", err);
       toast.error("Error communicating with data cluster.");
     } finally {
       setResumesLoading(false);
     }
   };
-
-  // ── USER DATA MUTATION FILTER & PAGINATION ───────────────────────
+  // 3. User Filter Logic
   const filteredUsers = useMemo(() => {
     const term = userSearchTerm.toLowerCase().trim();
     if (!term) return users;
@@ -86,18 +97,26 @@ export default function AdminReassignPage() {
     return filteredUsers.slice(start, start + USER_PAGE_SIZE);
   }, [filteredUsers, safeUserPage]);
 
-  // Reset user page tracking when search alters
-  useEffect(() => {
-    setUserCurrentPage(1);
-  }, [userSearchTerm]);
-
-  // ── RESUME DATA MUTATION FILTER & PAGINATION ─────────────────────
+  // 4. 🔥 ADVANCED MULTI-SOURCE SEARCH ENGINE
+  // Matches file names OR the original operator who submitted the document structure
+  // ── 🔥 ADVANCED MULTI-SOURCE SEARCH ENGINE (UPDATED FOR POPULATED USERID) ──
+  // Matches file names OR the original operator's Name, Email, or Login ID
   const filteredResumes = useMemo(() => {
     const term = resumeSearchTerm.toLowerCase().trim();
     if (!term) return resumes;
-    return resumes.filter(r =>
-      r.resumeId?.originalName?.toLowerCase().includes(term)
-    );
+
+    return resumes.filter(r => {
+      // 1. Match against the file's original system name string (e.g., '1123.pdf')
+      const fileNameMatch = r.resumeId?.originalName?.toLowerCase().includes(term);
+
+      // 2. Match against the original operator's profile fields who submitted it
+      const originalSubmitterMatch =
+        r.userId?.name?.toLowerCase().includes(term) ||
+        r.userId?.email?.toLowerCase().includes(term) ||
+        r.userId?.loginId?.toLowerCase().includes(term); // ✅ Allows searching by "DTS_" login ID string
+
+      return fileNameMatch || originalSubmitterMatch;
+    });
   }, [resumes, resumeSearchTerm]);
 
   const totalResumePages = Math.max(1, Math.ceil(filteredResumes.length / RESUME_PAGE_SIZE));
@@ -108,21 +127,15 @@ export default function AdminReassignPage() {
     return filteredResumes.slice(start, start + RESUME_PAGE_SIZE);
   }, [filteredResumes, safeResumePage]);
 
-  // Reset resume page tracking when search alters
-  useEffect(() => {
-    setResumeCurrentPage(1);
-  }, [resumeSearchTerm]);
-
-  // Selection configurations
+  // Memory validation keys
   const availableOnPage = pageResumes.filter(r => !r.isLocked);
   const allAvailable = filteredResumes.filter(r => !r.isLocked);
   const selectedIds = useMemo(() => new Set(selectedResumes.map(r => r._id)), [selectedResumes]);
 
   const pageSelectedCount = availableOnPage.filter(r => selectedIds.has(r._id)).length;
   const allPageSelected = availableOnPage.length > 0 && pageSelectedCount === availableOnPage.length;
-  const allSelected = allAvailable.length > 0 && selectedResumes.length === allAvailable.length;
 
-  // ── Selection helpers ─────────────────────────────────────────────
+  // 5. Allocation Selection Logic
   const toggleResume = (resume) => {
     if (resume.isLocked) return;
     setSelectedResumes(prev =>
@@ -142,42 +155,45 @@ export default function AdminReassignPage() {
     }
   };
 
-  const selectAll = () => {
-    if (allSelected) {
-      setSelectedResumes([]);
-    } else {
-      setSelectedResumes([...allAvailable]);
+  // Selects specific count from current array without overwriting other allocations
+  const handleCustomNumericSelect = (e) => {
+    e.preventDefault();
+    const count = parseInt(customSelectCount, 10);
+    if (isNaN(count) || count <= 0) {
+      toast.error("Please provide a valid selection value.");
+      return;
     }
-  };
 
-  const selectN = (n) => {
-    const toSelect = allAvailable.slice(0, n);
-    setSelectedResumes(toSelect);
+    // Capture items not yet inside the cart cache
+    const unselectedAvailable = allAvailable.filter(r => !selectedIds.has(r._id));
+    const targetSlice = unselectedAvailable.slice(0, count);
+
+    if (targetSlice.length === 0) {
+      toast.error("No unallocated matching profiles available in this view.");
+      return;
+    }
+
+    setSelectedResumes(prev => [...prev, ...targetSlice]);
+    toast.success(`Staged an extra ${targetSlice.length} resumes into allocation queue.`);
+    setCustomSelectCount(""); // Clear input field cleanly
   };
 
   const clearSelection = () => setSelectedResumes([]);
 
-  // ── Pagination page-number helper ────────────────────────────────
   const renderPageNumbers = () => {
     const pages = [];
-    const delta = 2; // siblings on each side of current page
-
+    const delta = 2;
     for (let i = 1; i <= totalResumePages; i++) {
-      if (
-        i === 1 ||
-        i === totalResumePages ||
-        (i >= safeResumePage - delta && i <= safeResumePage + delta)
-      ) {
+      if (i === 1 || i === totalResumePages || (i >= safeResumePage - delta && i <= safeResumePage + delta)) {
         pages.push(i);
       } else if (pages[pages.length - 1] !== "...") {
         pages.push("...");
       }
     }
-
     return pages;
   };
 
-  // ── Execute reassign ──────────────────────────────────────────────
+  // 6. Transmit Composite Payload Bundle
   const handleFinalReassign = async () => {
     if (!selectedUser || selectedResumes.length === 0) return;
     setActionLoading(true);
@@ -193,7 +209,7 @@ export default function AdminReassignPage() {
 
       const res = await executeBulkReassign(selectedUser._id, normalised);
       if (res.success) {
-        toast.success(`Allocated ${selectedResumes.length} resumes to ${selectedUser.name}`);
+        toast.success(`Allocated ${selectedResumes.length} resumes across systems to ${selectedUser.name}`);
         setSelectedResumes([]);
         setResumeCurrentPage(1);
         handleUserSelect(selectedUser);
@@ -201,7 +217,7 @@ export default function AdminReassignPage() {
         toast.error(res.error || "Execution pipeline rejected the payload.");
       }
     } catch (err) {
-      toast.error("Critical system error during database forging sequence.");
+      toast.error("Critical system error during execution loop.");
     } finally {
       setActionLoading(false);
     }
@@ -217,7 +233,7 @@ export default function AdminReassignPage() {
   return (
     <div className={`p-6 lg:p-10 min-h-screen bg-neutral-50 ${robotoSlab.className} text-black`}>
 
-      {/* ── HEADER INTERACTIVES ── */}
+      {/* ── HEADER ACTIONS ── */}
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-8 border-b-2 border-black pb-6 bg-white shrink-0">
         <div className="space-y-1">
           <div className="flex items-center gap-2 mb-1">
@@ -235,7 +251,7 @@ export default function AdminReassignPage() {
               onClick={clearSelection}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-black transition-all"
             >
-              <X size={14} /> Reset ({selectedResumes.length})
+              <X size={14} /> Reset Cart ({selectedResumes.length})
             </button>
             <button
               onClick={handleFinalReassign}
@@ -251,14 +267,13 @@ export default function AdminReassignPage() {
 
       <div className="grid grid-cols-12 gap-8">
 
-        {/* ── COLUMN 1: IDENTITY POOL WITH FILTER + PAGINATION ── */}
+        {/* ── REASSIGN TARGET IDENTITY GRID ── */}
         <div className="col-span-12 lg:col-span-4 space-y-4">
           <div className="flex items-center gap-2 px-1 text-zinc-400">
             <Users size={14} />
             <h3 className={`${passero.className} text-sm uppercase tracking-wider`}>01 / Operator Node Target</h3>
           </div>
 
-          {/* User Side Filter Input */}
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-300" size={14} />
             <input
@@ -275,16 +290,14 @@ export default function AdminReassignPage() {
               <button
                 key={u._id}
                 onClick={() => handleUserSelect(u)}
-                className={`w-full p-4 rounded-xl border-2 transition-all duration-300 text-left flex items-center justify-between group ${
-                  selectedUser?._id === u._id
-                    ? 'bg-black text-white border-black shadow-lg'
-                    : 'bg-white border-zinc-100 hover:border-zinc-300 text-black shadow-sm'
-                }`}
+                className={`w-full p-4 rounded-xl border-2 transition-all duration-300 text-left flex items-center justify-between group ${selectedUser?._id === u._id
+                  ? 'bg-black text-white border-black shadow-lg'
+                  : 'bg-white border-zinc-100 hover:border-zinc-300 text-black shadow-sm'
+                  }`}
               >
                 <div className="flex items-center gap-3 truncate">
-                  <div className={`${passero.className} w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black shrink-0 ${
-                    selectedUser?._id === u._id ? 'bg-white text-black' : 'bg-zinc-100 text-black'
-                  }`}>
+                  <div className={`${passero.className} w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black shrink-0 ${selectedUser?._id === u._id ? 'bg-white text-black' : 'bg-zinc-100 text-black'
+                    }`}>
                     {u.name?.charAt(0).toUpperCase()}
                   </div>
                   <div className="truncate">
@@ -303,7 +316,6 @@ export default function AdminReassignPage() {
             )}
           </div>
 
-          {/* User Side Minimal Pagination Controls */}
           {totalUserPages > 1 && (
             <div className="flex items-center justify-between bg-white border border-zinc-200 rounded-xl px-3 py-2 text-xs">
               <button
@@ -327,7 +339,7 @@ export default function AdminReassignPage() {
           )}
         </div>
 
-        {/* ── COLUMN 2: DATA FORGE SELECTION MODULE ── */}
+        {/* ── VARIABLE SEARCH DISPLAY ENGINE ── */}
         <div className="col-span-12 lg:col-span-8 space-y-4">
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-2 text-zinc-400">
@@ -342,32 +354,32 @@ export default function AdminReassignPage() {
           </div>
 
           {!selectedUser ? (
-            <div className="h-[55vh] flex flex-col items-center justify-center bg-white rounded-[2rem] border border-zinc-100 shadow-sm text-zinc-200">
+            <div className="h-[55vh] flex flex-col items-center justify-center bg-white rounded-4xl border border-zinc-100 shadow-sm text-zinc-200">
               <MousePointer2 size={36} className="mb-2 opacity-20 animate-bounce" />
               <p className="text-[10px] font-black uppercase tracking-widest">Select target endpoint from identity pool left side.</p>
             </div>
           ) : resumesLoading ? (
-            <div className="h-[55vh] flex flex-col items-center justify-center bg-white rounded-[2rem] border border-zinc-100 shadow-sm">
+            <div className="h-[55vh] flex flex-col items-center justify-center bg-white rounded-4xl border border-zinc-100 shadow-sm">
               <Loader2 className="animate-spin text-black mb-2" size={28} />
               <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 animate-pulse">Syncing instance arrays...</p>
             </div>
           ) : (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
 
-              {/* Filter inputs for resumes */}
+              {/* Enhanced Cross-Filtering Search Bar Input */}
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-300" size={14} />
                 <input
                   type="text"
-                  placeholder="FILTER SOURCE FILE DATA STRINGS BY NAME..."
+                  placeholder="FILTER BY FILE NAME OR SUBMITTED BY OPERATOR (E.G., 'USER 4')..."
                   className="w-full bg-white border border-zinc-200 rounded-xl py-3.5 pl-11 pr-4 text-[10px] font-bold uppercase tracking-wider outline-none focus:border-black transition-all"
                   value={resumeSearchTerm}
                   onChange={(e) => setResumeSearchTerm(e.target.value)}
                 />
               </div>
 
-              {/* Automated Control Cluster Bars */}
-              <div className="flex flex-wrap items-center justify-between gap-3 bg-white rounded-xl p-3 border border-zinc-200 text-[10px]">
+              {/* Interactive Control & Custom Input Bar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white rounded-xl p-3 border border-zinc-200 text-[10px]">
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={selectPage}
@@ -379,36 +391,33 @@ export default function AdminReassignPage() {
                     Page ({availableOnPage.length})
                   </button>
 
-                  <button
-                    onClick={selectAll}
-                    disabled={allAvailable.length === 0}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-black uppercase tracking-wider transition-all border
-                      ${allSelected ? 'bg-black text-white border-black' : 'bg-white text-black border-zinc-200 hover:border-black'}`}
-                  >
-                    <CheckCheck size={12} /> Total Matching ({allAvailable.length})
-                  </button>
-
-                  {[50, 100].map(n => (
-                    allAvailable.length > n && (
-                      <button
-                        key={n}
-                        onClick={() => selectN(n)}
-                        className="px-3 py-1.5 rounded-lg font-black uppercase tracking-wider transition-all border border-zinc-200 hover:border-black bg-white text-black"
-                      >
-                        Select top {n}
-                      </button>
-                    )
-                  ))}
+                  {/* ⚡ CUSTOM QUANTITY SELECT FORM FIELD */}
+                  <form onSubmit={handleCustomNumericSelect} className="flex items-center gap-1 border border-zinc-200 rounded-lg p-0.5 bg-neutral-50 shadow-inner">
+                    <Hash size={12} className="text-zinc-300 ml-2" />
+                    <input
+                      type="number"
+                      placeholder="QTY"
+                      value={customSelectCount}
+                      onChange={(e) => setCustomSelectCount(e.target.value)}
+                      className="w-12 bg-transparent text-[10px] font-black text-center focus:outline-none tracking-tight text-black"
+                    />
+                    <button
+                      type="submit"
+                      className="bg-black text-white px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-md hover:bg-neutral-800 transition-all"
+                    >
+                      Staged Top
+                    </button>
+                  </form>
                 </div>
 
-                <div className="font-mono text-[9px] font-black text-zinc-400 uppercase tracking-widest">
-                  Vault Balance: {filteredResumes.filter(r => !r.isLocked).length} Available / {filteredResumes.length} Total
+                <div className="font-mono text-[9px] font-black text-zinc-400 uppercase tracking-widest sm:text-right">
+                  Staged Active Balance: <span className="text-black font-black">{selectedResumes.length} Cart Items</span> | Matching View: {allAvailable.length}
                 </div>
               </div>
 
-              {/* Data Grid Display Fields */}
+              {/* Records Container Render Grid */}
               {pageResumes.length === 0 ? (
-                <div className="h-40 flex items-center justify-center bg-white border border-dashed border-zinc-200 rounded-[2rem] text-[10px] font-black uppercase tracking-widest text-zinc-300">
+                <div className="h-40 flex items-center justify-center bg-white border border-dashed border-zinc-200 rounded-4xl text-[10px] font-black uppercase tracking-widest text-zinc-300">
                   No Document Segments Located
                 </div>
               ) : (
@@ -419,13 +428,12 @@ export default function AdminReassignPage() {
                       <div
                         key={r._id}
                         onClick={() => !r.isLocked && toggleResume(r)}
-                        className={`p-5 rounded-xl border-2 transition-all duration-200 select-none group ${
-                          r.isLocked
+                        className={`p-5 rounded-xl border-2 transition-all duration-200 select-none group ${r.isLocked
                             ? 'bg-zinc-50 border-zinc-100 opacity-40 cursor-not-allowed'
                             : isSelected
                               ? 'bg-black text-white border-black shadow-md scale-[1.01]'
                               : 'bg-white border-zinc-100 hover:border-zinc-300 shadow-sm cursor-pointer'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center justify-between mb-3 text-[9px] font-black uppercase tracking-wider">
                           {r.isLocked ? (
@@ -437,7 +445,14 @@ export default function AdminReassignPage() {
                               {isSelected ? <CheckSquare size={16} fill="currentColor" /> : <Square size={16} />}
                             </div>
                           )}
-                          <span className="opacity-20 font-mono">DTS_REF</span>
+
+                          {/* ✅ FIXED: Displays the correct source operator loginId dynamically */}
+                          {r.userId?.loginId && (
+                            <span className={`px-2 py-0.5 rounded text-[8px] font-mono font-bold ${isSelected ? 'bg-zinc-800 text-zinc-300' : 'bg-zinc-100 text-zinc-500'
+                              }`}>
+                              FROM: {r.userId.loginId}
+                            </span>
+                          )}
                         </div>
 
                         <h4 className="font-black uppercase text-[11px] tracking-tight leading-tight mb-2 truncate">
@@ -446,7 +461,7 @@ export default function AdminReassignPage() {
 
                         <div className="flex items-center gap-2">
                           <div className={`w-1.5 h-1.5 rounded-full ${r.isLocked ? 'bg-rose-400' : isSelected ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-200'}`} />
-                          <span className={`text-[8px] font-black uppercase tracking-widest ${isSelected ? 'text-zinc-400' : 'text-zinc-400'}`}>
+                          <span className="text-[8px] font-black uppercase tracking-widest text-zinc-400">
                             {r.isLocked ? "Assigned to alternative worker pool" : isSelected ? "Staged for bulk execution" : "Available"}
                           </span>
                         </div>
@@ -456,7 +471,7 @@ export default function AdminReassignPage() {
                 </div>
               )}
 
-              {/* Data Forge Grid Pagination Footer Strip */}
+              {/* Pagination Blocks */}
               {totalResumePages > 1 && (
                 <div className="flex items-center justify-between bg-white border border-zinc-200 rounded-xl px-5 py-3 shadow-sm">
                   <button

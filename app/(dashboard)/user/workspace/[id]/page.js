@@ -45,8 +45,7 @@ function WorkspaceContent() {
 
     const [resume, setResume] = useState(null);
     const [loading, setLoading] = useState(!!(id && id !== "undefined" && userId));
-    const [saveStatus, setSaveStatus] = useState("synced");
-    const [activeAction, setActiveAction] = useState(null); // 'submit' | 'save' | 'skip'
+    const [activeAction, setActiveAction] = useState(null);
     const [globalError, setGlobalError] = useState(null);
 
     const [formData, setFormData] = useState({
@@ -60,8 +59,6 @@ function WorkspaceContent() {
         expMonths: "", expYears: "", totalMonths: "", noOfCompanies: "", lastEmployer: ""
     });
 
-    const saveTimeoutRef = useRef(null);
-
     const isExpired = useMemo(() => {
         if (!userEndDate) return false;
         const now = new Date();
@@ -70,26 +67,7 @@ function WorkspaceContent() {
         return now > expiry;
     }, [userEndDate]);
 
-    const performSync = useCallback(async (dataToSave) => {
-        if (!userId || !id || isReadOnly || globalError || isExpired) return;
-        setSaveStatus("syncing");
-        try {
-            const res = await saveResumeProgress(id, userId, dataToSave);
-            if (!res.success && res.error === "ACCESS_DENIED") {
-                setGlobalError(res.message);
-            }
-        } finally {
-            setSaveStatus("synced");
-        }
-    }, [id, userId, isReadOnly, globalError, isExpired]);
-
-    const triggerAutoSave = useCallback((newData) => {
-        if (isReadOnly || globalError || isExpired) return;
-        setSaveStatus("syncing");
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = setTimeout(() => performSync(newData), 30000);
-    }, [performSync, isReadOnly, globalError, isExpired]);
-
+    // 1. Initial Data Load Sequence
     useEffect(() => {
         if (!id || id === "undefined" || !userId) return;
         let isMounted = true;
@@ -112,25 +90,40 @@ function WorkspaceContent() {
         return () => { isMounted = false; };
     }, [id, userId]);
 
-    useEffect(() => {
-        return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
-    }, []);
-
+    // 2. Pure Change Handler (No Auto-Save Background Triggers)
     const handleChange = (e) => {
         if (isReadOnly || globalError || isExpired) return;
         const { name, value } = e.target;
-        const updatedData = { ...formData, [name]: value };
-        setFormData(updatedData);
-        triggerAutoSave(updatedData);
+        setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const isFormComplete = () =>
-        Object.values(formData).every(val => val?.toString().trim() !== "");
+    const handleHoldSave = async () => {
+        if (isReadOnly || globalError || isExpired || activeAction) return;
+        setActiveAction('save');
+
+        try {
+            const cleanData = { ...formData };
+            const res = await holdAndSaveResume(id, userId, cleanData);
+
+            if (res.success) {
+                if (res.newData) updateUser(res.newData);
+                alert(res.message || "Resume progress parked.");
+                router.push("/user/reassigned");
+            } else {
+                alert(res.error || "Save failed.");
+            }
+        } catch (err) {
+            console.error("🔥 Manual Save Crash:", err);
+            alert(`An error occurred: ${err.message}`);
+        } finally {
+            setActiveAction(null);
+        }
+    };
 
     const handleSubmit = async () => {
         if (isReadOnly || globalError || isExpired || activeAction) return;
-        if (!isFormComplete()) { alert("⚠️ All fields must be filled."); return; }
         if (!window.confirm("Submit this resume as final?")) return;
+
         setActiveAction('submit');
         try {
             const res = await submitResume(id, userId, formData);
@@ -140,27 +133,9 @@ function WorkspaceContent() {
             } else {
                 alert(res.error || "Submission failed.");
             }
-        } catch {
-            alert("An error occurred.");
-        } finally {
-            setActiveAction(null);
-        }
-    };
-
-    const handleHoldSave = async () => {
-        if (isReadOnly || globalError || isExpired || activeAction) return;
-        if (!isFormComplete()) { alert("⚠️ All fields must be filled."); return; }
-        setActiveAction('save');
-        try {
-            const res = await holdAndSaveResume(id, userId, formData);
-            if (res.success) {
-                if (res.newData) updateUser(res.newData);
-                router.push("/user/reassigned");
-            } else {
-                alert(res.error || "Save failed.");
-            }
-        } catch {
-            alert("An error occurred.");
+        } catch (err) {
+            console.error("Submission Crash:", err);
+            alert("An error occurred during submission.");
         } finally {
             setActiveAction(null);
         }
@@ -169,10 +144,7 @@ function WorkspaceContent() {
     const handleSkip = async () => {
         if (isReadOnly || globalError || isExpired || activeAction) return;
 
-        if (saveTimeoutRef.current) {
-            clearTimeout(saveTimeoutRef.current);
-            saveTimeoutRef.current = null;
-        }
+        // ✅ FIXED: Completely removed the dead saveTimeoutRef check block
 
         if (!window.confirm("Skip this template layout and request the next available data file?")) return;
 
@@ -196,7 +168,6 @@ function WorkspaceContent() {
             setActiveAction(null);
         }
     };
-
     if (globalError || isExpired) {
         return (
             <div className="h-screen flex flex-col items-center justify-center p-10 text-center bg-slate-50 font-sans">
@@ -252,13 +223,7 @@ function WorkspaceContent() {
                             <FileText size={14} />
                             <span className="max-w-xs">{resume?.originalName || "Untitled Resume"}</span>
                         </h2>
-                        {!isReadOnly && (
-                            <span className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-2 ${saveStatus === 'syncing' ? 'text-zinc-400' : 'text-emerald-600'}`}>
-                                {saveStatus === 'syncing'
-                                    ? <><Loader2 size={14} className="animate-spin" /> Syncing...</>
-                                    : <><CheckCircle size={14} /> Data Synced</>}
-                            </span>
-                        )}
+
                     </div>
                 </div>
 
@@ -281,19 +246,14 @@ function WorkspaceContent() {
                         </button>
 
                         {/* HOLD & SAVE */}
+                        {/* HOLD & SAVE BUTTON */}
                         <button
+                            type="button" // 👈 CRUCIAL: Prevents the browser from misfiring this as a submit action
                             onClick={handleHoldSave}
                             disabled={anyActionLoading}
-                            className="group px-6 py-3 border-2 border-violet-600 bg-white text-violet-600 text-[10px] font-black uppercase tracking-[0.2em] cursor-pointer hover:bg-violet-600 hover:text-white transition-all duration-300 disabled:opacity-30 rounded-xl flex items-center justify-center min-w-[150px]"
+                            className="px-6 py-3 border-2 border-violet-600 bg-white text-violet-600 text-[10px] font-black uppercase tracking-[0.2em]"
                         >
-                            {activeAction === 'save' ? (
-                                <Loader2 size={14} className="animate-spin" />
-                            ) : (
-                                <span className="flex items-center gap-2">
-                                    <CloudCheck size={16} className="group-hover:scale-110 transition-transform" />
-                                    Hold & Save
-                                </span>
-                            )}
+                            {activeAction === 'save' ? "Parking..." : "Hold & Save"}
                         </button>
 
                         {/* SUBMIT FINAL */}

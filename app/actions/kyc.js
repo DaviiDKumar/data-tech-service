@@ -6,7 +6,7 @@ import mongoose from "mongoose"; // Isse ObjectId convert karenge
 import { revalidatePath } from "next/cache";
 import cloudinary from "@/lib/cloudinary";
 import { uploadToCloudinary } from "@/lib/cloudinary";
-
+import User from "@/models/User";
 
 export async function submitBankDetails(userId, bankPayload) {
   try {
@@ -31,7 +31,7 @@ export async function submitBankDetails(userId, bankPayload) {
         // DEBUG LOG 2: Monitor these specific values
         accountType: bankPayload.accountType || 'Savings',
         paymentMethod: bankPayload.paymentMethod || 'UPI',
-        paymentMobile: bankPayload.paymentMobile, 
+        paymentMobile: bankPayload.paymentMobile,
       },
       "bankDetails.status": "pending",
       lastUpdated: new Date(),
@@ -43,10 +43,10 @@ export async function submitBankDetails(userId, bankPayload) {
     const result = await Kyc.findOneAndUpdate(
       { userId: userObjectId },
       { $set: updateData },
-      { 
-        upsert: true, 
-        new: true, 
-        runValidators: true 
+      {
+        upsert: true,
+        new: true,
+        runValidators: true
       }
     );
 
@@ -54,9 +54,9 @@ export async function submitBankDetails(userId, bankPayload) {
     console.log("✅ [DB Saved Result]:", JSON.stringify(result.bankDetails.data, null, 2));
 
     revalidatePath("/user/profile");
-    return { 
-      success: true, 
-      message: "Bank details submitted and are now pending verification." 
+    return {
+      success: true,
+      message: "Bank details submitted and are now pending verification."
     };
   } catch (error) {
     console.error("❌ Bank Submission Error:", error.message);
@@ -74,8 +74,7 @@ export async function submitKycWithFiles(userId, formData) {
     const idFile = formData.get("idFile");
     const addrFile = formData.get("addrFile");
 
-    // Parallel upload to Cloudinary for speed
-    // If no new file is selected, these will return null
+    // 1. Parallel media streaming loops over to Cloudinary bucket nodes
     const [idFileUrl, addrFileUrl] = await Promise.all([
       idFile && idFile.size > 0 ? uploadToCloudinary(idFile, userId, "id_proof") : null,
       addrFile && addrFile.size > 0 ? uploadToCloudinary(addrFile, userId, "address_proof") : null
@@ -83,42 +82,47 @@ export async function submitKycWithFiles(userId, formData) {
 
     const userObjectId = new mongoose.Types.ObjectId(userId);
 
+    // 2. ✅ FIX: Restructure nested keys directly instead of flattening via dots
     const updateData = {
       userId: userObjectId,
-      "documents.idProof": {
-        // Enums: "aadhaar", "pan", "voter_id", "passport"
-        idType: formData.get("idType"), 
-        idNumber: formData.get("idNumber"),
-        fileUrl: idFileUrl || formData.get("existingIdUrl"),
+      documents: {
+        status: "pending", // Shifting condition status parameters to pending for review
+        idProof: {
+          idType: formData.get("idType"),
+          idNumber: formData.get("idNumber"),
+          fileUrl: idFileUrl || formData.get("existingIdUrl"),
+        },
+        addressProof: {
+          idType: formData.get("addressType"),
+          idNumber: formData.get("addressNumber"),
+          fileUrl: addrFileUrl || formData.get("existingAddrUrl"),
+        }
       },
-      "documents.addressProof": {
-        // Enums: "electricy_bill", "rent_agreement", "water_bill", "gas_bill", "other_bill"
-        idType: formData.get("addressType"),
-        idNumber: formData.get("addressNumber"),
-        fileUrl: addrFileUrl || formData.get("existingAddrUrl"),
-      },
-      // State transitions to 'pending' for admin review
-      "documents.status": "pending",
       lastUpdated: new Date(),
     };
 
-    // Upsert logic: Create if new node, update if existing
+    // 3. Commit update to your KYC collection tracker node
     const result = await Kyc.findOneAndUpdate(
-      { userId: userObjectId }, 
-      { $set: updateData }, 
-      { 
-        upsert: true, 
-        new: true, 
-        runValidators: true // Enforces enum checks
+      { userId: userObjectId },
+      { $set: updateData },
+      {
+        upsert: true,
+        new: true,
+        runValidators: true
       }
     );
 
-    console.log("✅ KYC Sync Result:", result ? "Pending Review" : "Failed");
+    // 4. ✅ FIX: Run fallback status hook execution updates for findOneAndUpdate actions
+    await User.findByIdAndUpdate(userObjectId, {
+      kycStatus: "pending"
+    });
+
+    console.log("✅ KYC Sync Result:", result ? "Pending Review Updated" : "Failed");
 
     revalidatePath("/user/profile");
-    return { 
-      success: true, 
-      message: "Identity and Address proof records submitted for validation." 
+    return {
+      success: true,
+      message: "Identity and Address proof records submitted for validation."
     };
 
   } catch (error) {
@@ -129,16 +133,16 @@ export async function submitKycWithFiles(userId, formData) {
 
 
 export async function getKycRecord(userId) {
-    try {
-      await connectDB();
-      // Yahan hum database se fresh data nikaal rahe hain
-      const record = await Kyc.findOne({ userId }).lean();
-      
-      if (!record) return { success: true, data: null };
+  try {
+    await connectDB();
+    // Yahan hum database se fresh data nikaal rahe hain
+    const record = await Kyc.findOne({ userId }).lean();
 
-      return { success: true, data: JSON.parse(JSON.stringify(record)) };
-    } catch (error) {
-      console.error("Get KYC Error:", error);
-      return { success: false, error: error.message };
-    }
+    if (!record) return { success: true, data: null };
+
+    return { success: true, data: JSON.parse(JSON.stringify(record)) };
+  } catch (error) {
+    console.error("Get KYC Error:", error);
+    return { success: false, error: error.message };
+  }
 }

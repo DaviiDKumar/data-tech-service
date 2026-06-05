@@ -155,11 +155,13 @@ export async function getReassignableResumes(targetUserId) {
   try {
     await connectDB();
 
-    // Fetch approved items from target pool arrays cleanly
+    // 1. Fetch approved instances and populate BOTH the resume files AND the original submitter profile nodes
     const approvedInstances = await ResumeInstance.find({ status: "approved" })
       .populate("resumeId", "originalName fileUrl")
+      .populate("userId", "name email loginId") // ⚡ THE FIX: Pulls the submitter's identity data straight from the User schema collection
       .lean();
 
+    // 2. Locate what the target user has already touched to calculate the lockouts
     const userExistingInstances = await ResumeInstance.find({ userId: targetUserId })
       .select("resumeId")
       .lean();
@@ -168,7 +170,7 @@ export async function getReassignableResumes(targetUserId) {
       userExistingInstances.map(inst => inst.resumeId?.toString()).filter(Boolean)
     );
 
-    // Filter duplicates to guarantee clear layout list presentation grids
+    // 3. Filter duplicates using our strict Map structure to keep layouts clean
     const uniqueMap = new Map();
     for (const inst of approvedInstances) {
       if (!inst.resumeId?._id) continue;
@@ -182,7 +184,10 @@ export async function getReassignableResumes(targetUserId) {
       }
     }
 
-    return { success: true, data: JSON.parse(JSON.stringify(Array.from(uniqueMap.values()))) };
+    return { 
+      success: true, 
+      data: JSON.parse(JSON.stringify(Array.from(uniqueMap.values()))) 
+    };
   } catch (error) {
     console.error("Fetch Reassignable Error:", error);
     return { success: false, error: error.message };
@@ -200,7 +205,7 @@ export async function executeBulkReassign(targetUserId, sourceInstances) {
       resumeId: inst.resumeId?._id || inst.resumeId,
       userId: targetUserId,
       formData: inst.formData || {},
-      status: "re-assigned",
+      status: "re-assigned", // Parked as re-assigned cleanly
       isTouched: true,
       startedAt: new Date(),
     })).filter(inst => inst.resumeId);
@@ -208,10 +213,10 @@ export async function executeBulkReassign(targetUserId, sourceInstances) {
     if (newInstances.length > 0) {
       await ResumeInstance.insertMany(newInstances);
 
+      // ✅ FIXED HERE: Completely removed stats.inProgressCount from this increment block!
       await User.findByIdAndUpdate(targetUserId, {
         $inc: {
-          "stats.assignedCount": newInstances.length,
-          "stats.inProgressCount": newInstances.length
+          "stats.assignedCount": newInstances.length
         }
       });
     }

@@ -1,17 +1,19 @@
 "use server";
+
 import connectDB from "@/lib/db";
 import Resume from "@/models/Resume";
 import User from "@/models/User";
-import ResumeInstance from "@/models/ResumeInstance"; // Tera instance model
+import ResumeInstance from "@/models/ResumeInstance";
 import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
 
-// User ke liye resumes fetch karne ka server action
+/**
+ * User ke liye resumes fetch karne ka server action with Smart Expiry Guards
+ */
 export async function getResumesForUser(page = 1, limit = 8, userId) {
     try {
         await connectDB();
-        
-        // --- 1. FETCH USER DATA FOR THE DATE GUARD ---
+
         const user = await User.findById(userId).select('endDate role').lean();
         if (!user) return { success: false, error: "User not found" };
 
@@ -22,7 +24,6 @@ export async function getResumesForUser(page = 1, limit = 8, userId) {
 
         const skip = (page - 1) * limit;
 
-        // 2. Fetch master resumes
         const resumes = await Resume.find({})
             .sort({ createdAt: -1 })
             .skip(skip)
@@ -31,22 +32,16 @@ export async function getResumesForUser(page = 1, limit = 8, userId) {
 
         const total = await Resume.countDocuments({});
 
-        // 3. Fetch user instances
         const userInstances = await ResumeInstance.find({ userId })
             .select('resumeId status')
             .lean();
 
-        // 4. Map resumes with "Smart Expiry" logic
         const mappedData = resumes.map(res => {
             const instance = userInstances.find(inst => inst.resumeId.toString() === res._id.toString());
-            
             let status = instance ? instance.status : 'available';
 
-            // --- THE GUARD ---
-            // If the plan is expired and they haven't worked on this resume yet,
-            // we mark it as 'locked' instead of 'available'.
             if (isExpired && status === 'available') {
-                status = 'locked'; 
+                status = 'locked';
             }
 
             return {
@@ -66,17 +61,14 @@ export async function getResumesForUser(page = 1, limit = 8, userId) {
         return { success: false, error: "Failed to fetch pool" };
     }
 }
-// hits ko incremnet krne ke liye
 
-
-
-// @/app/actions/userWork.js
-
+/**
+ * Automatically assigns an available resume, enforcing timeline lockouts
+ */
 export async function autoAssignAndGetId(userId) {
     try {
         await connectDB();
 
-        // --- 0. THE SECURITY GUARD (BLOCK NEW ASSIGNMENTS) ---
         const user = await User.findById(userId).select('endDate role').lean();
         if (!user) return { success: false, error: "User profile not found." };
 
@@ -84,15 +76,13 @@ export async function autoAssignAndGetId(userId) {
         const expiry = new Date(user.endDate);
         expiry.setHours(23, 59, 59, 999);
 
-        // If time is up, don't let them assign anything new
         if (now > expiry && user.role !== "admin") {
-            return { 
-                success: false, 
-                error: "Project Timeline Completed. New assignments are locked." 
+            return {
+                success: false,
+                error: "Project Timeline Completed. New assignments are locked."
             };
         }
 
-        // 1. RECOVERY CHECK (Existing logic - stays same)
         const existingTask = await ResumeInstance.findOne({
             userId,
             status: "in-progress"
@@ -102,7 +92,6 @@ export async function autoAssignAndGetId(userId) {
             return { success: true, resumeId: existingTask.resumeId.toString() };
         }
 
-        // 2. ASSIGN NEW
         const workedResumes = await ResumeInstance.find({ userId }).distinct('resumeId');
 
         const nextResume = await Resume.findOne({
@@ -114,7 +103,6 @@ export async function autoAssignAndGetId(userId) {
             return { success: false, error: "All resumes completed!" };
         }
 
-        // 3. CREATE NEW INSTANCE & UPDATE USER STATS
         await Promise.all([
             ResumeInstance.create({
                 userId,
@@ -122,11 +110,11 @@ export async function autoAssignAndGetId(userId) {
                 status: "in-progress",
                 formData: {}
             }),
-            User.findByIdAndUpdate(userId, { 
-                $inc: { "stats.inProgressCount": 1 } 
+            User.findByIdAndUpdate(userId, {
+                $inc: { "stats.inProgressCount": 1 }
             }),
-            Resume.findByIdAndUpdate(nextResume._id, { 
-                $inc: { totalHits: 1 } 
+            Resume.findByIdAndUpdate(nextResume._id, {
+                $inc: { totalHits: 1 }
             })
         ]);
 
@@ -139,11 +127,14 @@ export async function autoAssignAndGetId(userId) {
     }
 }
 
+/**
+ * Increment master resume visual hit counters
+ */
 export async function incrementResumeHits(resumeId) {
     try {
         await connectDB();
         await Resume.findByIdAndUpdate(resumeId, {
-            $inc: { totalHits: 1 } // Har baar click par 1 badh jayega
+            $inc: { totalHits: 1 }
         });
         return { success: true };
     } catch (error) {
@@ -151,82 +142,17 @@ export async function incrementResumeHits(resumeId) {
         return { success: false };
     }
 }
-// Resume progress ko save karne ka server action (Auto-save ke liye)
-export async function saveResumeProgress(resumeId, userId, data) {
-    try {
-        await connectDB();
 
-        // 1. Fetch current status and user stats simultaneously
-        const [existingDoc, userDoc] = await Promise.all([
-            ResumeInstance.findOne({ resumeId, userId }).lean(),
-            User.findById(userId).select("stats").lean()
-        ]);
-
-        const oldStatus = existingDoc ? existingDoc.status : 'default';
-        const currentStats = userDoc?.stats || {};
-
-        // 2. Data update/save
-        await ResumeInstance.findOneAndUpdate(
-            { resumeId, userId },
-            {
-                $set: {
-                    formData: data,
-                    status: 'in-progress',
-                    isTouched: true
-                }
-            },
-            { upsert: true }
-        );
-
-        // 3. 🔥 DYNAMIC STATS LOGIC (Zero-Floor Protected)
-        const statsUpdate = {};
-
-        // Only update stats if we are CHANGING to 'in-progress'
-        if (oldStatus !== 'in-progress') {
-
-            // Case A: First time touching the task (New or Default)
-            if (oldStatus === 'default' || !existingDoc) {
-                statsUpdate["stats.inProgressCount"] = 1;
-            }
-
-            // Case B: Moving a Rejected task back to Progress
-            else if (oldStatus === 'rejected') {
-                statsUpdate["stats.inProgressCount"] = 1;
-                // Floor protection: Only minus if > 0
-                if (currentStats.rejectedCount > 0) {
-                    statsUpdate["stats.rejectedCount"] = -1;
-                }
-            }
-
-            // Case C: If it was 'submitted' but user is editing again (optional logic)
-            else if (oldStatus === 'submitted') {
-                statsUpdate["stats.inProgressCount"] = 1;
-                if (currentStats.submittedCount > 0) {
-                    statsUpdate["stats.submittedCount"] = -1;
-                }
-            }
-        }
-
-        // 4. Atomic Update
-        if (Object.keys(statsUpdate).length > 0) {
-            await User.findByIdAndUpdate(userId, { $inc: statsUpdate });
-        }
-
-        revalidatePath("/user");
-        return { success: true };
-
-    } catch (error) {
-        console.error("Auto-save error:", error);
-        return { success: false };
-    }
-}
-
-//save option
+/**
+ * Explicit Hold & Save action to park a resume out of active queues
+ */
 export async function holdAndSaveResume(resumeId, userId, data) {
     try {
         await connectDB();
 
-        // 1. Fetch current status and user stats simultaneously
+        if (!userId) throw new Error("User ID parameter is missing");
+        if (!resumeId) throw new Error("Resume ID parameter is missing");
+
         const [existingDoc, userDoc] = await Promise.all([
             ResumeInstance.findOne({ resumeId, userId }).lean(),
             User.findById(userId).select("stats").lean()
@@ -235,78 +161,66 @@ export async function holdAndSaveResume(resumeId, userId, data) {
         const oldStatus = existingDoc ? existingDoc.status : 'default';
         const currentStats = userDoc?.stats || {};
 
-        // 2. Update status to 'saved'
-        // This 'saved' status unlocks the "New Assignment" button in your logic
         await ResumeInstance.findOneAndUpdate(
             { resumeId, userId },
             {
                 $set: {
-                    formData: data,
+                    formData: data || {},
                     status: 'saved',
+                    isTouched: true,
                     updatedAt: new Date()
-                }
+                },
+                $inc: { revisionCount: 1 }
             },
-            { upsert: true }
+            { upsert: true, new: true }
         );
 
-        // 3. 🔥 DYNAMIC STATS LOGIC (Zero-Floor Protected)
-        const statsUpdate = {};
-
-        // Only adjust stats if we are MOVING OUT of a counted state
         if (oldStatus !== 'saved') {
+            const incOps = { "stats.savedCount": 1 };
 
-            // If it was being worked on, we must decrease inProgress
             if (oldStatus === 'in-progress' || oldStatus === 're-assigned') {
                 if (currentStats.inProgressCount > 0) {
-                    statsUpdate["stats.inProgressCount"] = -1;
+                    incOps["stats.inProgressCount"] = -1;
                 }
+            } else if (oldStatus === 'rejected' && currentStats.rejectedCount > 0) {
+                incOps["stats.rejectedCount"] = -1;
             }
 
-            // If it was a rejected task being moved to 'saved'
-            else if (oldStatus === 'rejected') {
-                if (currentStats.rejectedCount > 0) {
-                    statsUpdate["stats.rejectedCount"] = -1;
-                }
-            }
-
-            // Note: We don't increment 'saved' count because it's usually 
-            // a neutral state that doesn't show in your main dashboard cards.
+            await User.findByIdAndUpdate(userId, { $inc: incOps });
         }
 
-        // 4. Atomic Update
-        if (Object.keys(statsUpdate).length > 0) {
-            await User.findByIdAndUpdate(userId, { $inc: statsUpdate });
-        }
+        const updatedUser = await User.findById(userId).select("stats").lean();
 
         revalidatePath("/user");
+
         return {
             success: true,
-            message: "Resume parked in 'Saved' list. You can now take a new assignment."
+            message: "Resume parked in 'Saved' list successfully.",
+            newData: { stats: updatedUser.stats }
         };
 
     } catch (error) {
-        console.error("Hold/Save error:", error);
-        return { success: false, message: "Failed to move resume." };
+        console.error("❌ HOLD/SAVE ERROR:", error.message);
+        return { success: false, error: error.message || "Failed to update ledger records." };
     }
 }
 
-//reusme
-// app/actions/userWork.js
-
+/**
+ * Finalizes form payload submissions, updating stats atomically
+ */
 export async function submitResume(resumeId, userId, data) {
     try {
         await connectDB();
 
-        // 1. Get current execution state parameters simultaneously
         const [currentDoc, userDoc] = await Promise.all([
             ResumeInstance.findOne({ resumeId, userId }).lean(),
-            User.findById(userId).select("stats").lean()
+            User.findById(userId).select("stats kycStatus bankDetailsStatus").lean()
         ]);
 
         const oldStatus = currentDoc ? currentDoc.status : null;
         const currentStats = userDoc?.stats || {};
+        const statsUpdate = {};
 
-        // 2. Commit extracted form payload to storage
         await ResumeInstance.findOneAndUpdate(
             { resumeId, userId },
             {
@@ -321,36 +235,46 @@ export async function submitResume(resumeId, userId, data) {
             { upsert: true }
         );
 
-        // 3. Dynamic metrics updates with zero-floor protections
-        const statsUpdate = {};
-
         if (oldStatus !== 'submitted') {
             statsUpdate["stats.submittedCount"] = 1;
 
-            if ((oldStatus === 'in-progress' || oldStatus === 're-assigned') && (currentStats.inProgressCount > 0)) {
+            if (oldStatus === 're-assigned' && currentStats.assignedCount > 0) {
+                statsUpdate["stats.assignedCount"] = -1;
+            }
+            else if (oldStatus === 'in-progress' && currentStats.inProgressCount > 0) {
                 statsUpdate["stats.inProgressCount"] = -1;
             }
-            else if (oldStatus === 'rejected' && (currentStats.rejectedCount > 0)) {
+            else if (oldStatus === 'review' && currentStats.reviewCount > 0) {
+                statsUpdate["stats.reviewCount"] = -1;
+            }
+            else if (oldStatus === 'rejected' && currentStats.rejectedCount > 0) {
                 statsUpdate["stats.rejectedCount"] = -1;
+            }
+            else if (oldStatus === 'saved' && currentStats.savedCount > 0) {
+                statsUpdate["stats.savedCount"] = -1;
             }
         }
 
-        // Apply stat increment parameters to core User model
         if (Object.keys(statsUpdate).length > 0) {
             await User.findByIdAndUpdate(userId, { $inc: statsUpdate });
         }
 
-        // 4. Calculate today's real-time productivity limits cleanly on the backend
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
+        const istString = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
+        const localIstDate = new Date(istString);
+
+        const startOfToday = new Date(
+            localIstDate.getFullYear(),
+            localIstDate.getMonth(),
+            localIstDate.getDate(),
+            0, 0, 0, 0
+        );
 
         const todayCount = await ResumeInstance.countDocuments({
             userId,
-            status: { $in: ["submitted", "saved", "approved"] },
+            status: { $in: ["submitted", "saved", "approved", "re-assigned", "review"] },
             updatedAt: { $gte: startOfToday }
         });
 
-        // 5. Fetch fresh integrated data structures to pass directly down the wire
         const updatedUser = await User.findById(userId).select("stats kycStatus bankDetailsStatus").lean();
 
         revalidatePath("/user");
@@ -360,7 +284,7 @@ export async function submitResume(resumeId, userId, data) {
             newData: {
                 stats: {
                     ...updatedUser.stats,
-                    todayCompletedCount: todayCount // Track inside your store
+                    todayCompletedCount: todayCount
                 },
                 kycStatus: updatedUser.kycStatus,
                 bankDetailsStatus: updatedUser.bankDetailsStatus
@@ -368,17 +292,14 @@ export async function submitResume(resumeId, userId, data) {
         };
 
     } catch (error) {
-        console.error("❌ SUBMIT ERROR:", error.message);
+        console.error("❌ SUBMIT RESUME SYSTEM ERROR:", error.message);
         return { success: false, error: error.message };
     }
 }
 
-
-// User ke submitted resumes fetch karne ka server action
 export async function getSubmittedResumes(userId) {
     try {
         await connectDB();
-        // Hum submitted, pending, approved aur rejected charo status uthayenge
         const results = await ResumeInstance.find({
             userId,
             status: { $in: ['submitted', 'pending', 'approved', 'rejected'] }
@@ -393,8 +314,6 @@ export async function getSubmittedResumes(userId) {
     }
 }
 
-
-// User ke in-progress resumes fetch karne ka server action
 export async function getInProgressResumes(userId) {
     try {
         await connectDB();
@@ -403,7 +322,7 @@ export async function getInProgressResumes(userId) {
             status: 'in-progress'
         })
             .populate('resumeId', 'originalName')
-            .sort({ updatedAt: -1 }) // Taki jo abhi chhoda wahi sabse upar dikhe
+            .sort({ updatedAt: -1 })
             .lean();
 
         return { success: true, data: JSON.parse(JSON.stringify(results)) };
@@ -412,74 +331,100 @@ export async function getInProgressResumes(userId) {
     }
 }
 
-
-// Workspace ke liye - Resume + saved formData dono saath
-//// Ek specific resume ke liye details fetch karne ka function
+/**
+ * Workspace fetch engine with automatic live state re-balancing logic
+ */
+/**
+ * Workspace fetch engine with automatic live state re-balancing logic
+ * FIXED: Safely flattens Mongoose Map structures into plain serializable objects
+ */
 export async function getWorkspaceData(resumeId, userId) {
     try {
         if (!resumeId || resumeId === "undefined") return { success: false, error: "Invalid ID" };
 
         await connectDB();
 
-        // Fetch User, Resume, and Instance
         const [resume, instance, user] = await Promise.all([
             Resume.findById(resumeId).lean(),
-            ResumeInstance.findOne({ resumeId, userId }).lean(),
-            User.findById(userId).select('endDate role isActive').lean()
+            ResumeInstance.findOne({ resumeId, userId }), // Removed .lean() here to safely work with the instance doc methods
+            User.findById(userId)
         ]);
 
         if (!resume || !user) return { success: false, error: "Data not found" };
 
-        // THE GUARD
         const now = new Date();
         const expiry = new Date(user.endDate);
         expiry.setHours(23, 59, 59, 999);
 
         if (!user.isActive || (now > expiry && user.role !== "admin")) {
-            return { 
-                success: false, 
-                error: "ACCESS_DENIED", 
-                message: "Project timeline completed. This workspace is locked." 
+            return {
+                success: false,
+                error: "ACCESS_DENIED",
+                message: "Project timeline completed. This workspace is locked."
             };
+        }
+
+        // Automatic live state counter ledger re-balancing on load
+        if (instance && (instance.status === 'saved' || instance.status === 're-assigned' || instance.status === 'rejected')) {
+            const oldStatus = instance.status;
+            
+            instance.status = 'in-progress';
+            await instance.save();
+
+            const statsUpdate = { "stats.inProgressCount": 1 };
+            
+            if (oldStatus === 'saved' && user.stats.savedCount > 0) {
+                statsUpdate["stats.savedCount"] = -1;
+            } else if (oldStatus === 're-assigned' && user.stats.assignedCount > 0) {
+                statsUpdate["stats.assignedCount"] = -1;
+            } else if (oldStatus === 'rejected' && user.stats.rejectedCount > 0) {
+                statsUpdate["stats.rejectedCount"] = -1;
+            }
+
+            await User.findByIdAndUpdate(userId, { $inc: statsUpdate });
+        }
+
+        // ⚡ SERIALIZATION FIX: Convert Mongoose Map to Plain Object cleanly
+        let plainFormData = null;
+        if (instance?.formData) {
+            plainFormData = instance.formData instanceof Map 
+                ? Object.fromEntries(instance.formData) // Converts Map to plain structure {}
+                : JSON.parse(JSON.stringify(instance.formData)); // Fallback sanity check
         }
 
         return {
             success: true,
-            data: { ...JSON.parse(JSON.stringify(resume)), formData: instance?.formData || null }
+            data: { 
+                ...JSON.parse(JSON.stringify(resume)), 
+                formData: plainFormData // ✅ Safe serialization across wire boundary
+            }
         };
     } catch (error) {
+        console.error("Workspace Serialization Error:", error);
         return { success: false, error: error.message };
     }
 }
 
-//reassgined resume layega user ke liye
 export async function getReassignedResumes(userId) {
     try {
         await connectDB();
-
         const results = await ResumeInstance.find({
             userId,
-            // Use $in to check for multiple possible statuses
             status: { $in: ["re-assigned", "saved", "review"] }
         })
             .populate("resumeId", "originalName fileUrl")
             .sort({ updatedAt: -1 })
             .lean();
-        return {
-            success: true,
-            data: JSON.parse(JSON.stringify(results))
-        };
+        return { success: true, data: JSON.parse(JSON.stringify(results)) };
     } catch (error) {
         console.error("User: Error fetching re-assigned resumes ->", error);
         return { success: false, error: error.message };
     }
 }
 
-//rejceted reumes yaha se ajaynge 
 export async function getRejectedResumes(userId) {
     try {
         await connectDB();
-
         const results = await ResumeInstance.find({
             userId,
             status: "rejected"
@@ -488,72 +433,20 @@ export async function getRejectedResumes(userId) {
             .sort({ updatedAt: -1 })
             .lean();
 
-        return {
-            success: true,
-            data: JSON.parse(JSON.stringify(results))
-        };
+        return { success: true, data: JSON.parse(JSON.stringify(results)) };
     } catch (error) {
         console.error("User: Error fetching rejected resumes ->", error);
         return { success: false, error: error.message };
     }
 }
 
-
-export async function getUserTodayAndTotalWork(userId) {
-    try {
-        await connectDB();
-
-        // 1. Get the start of Today (00:00:00)
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
-
-        // 2. Count Total Completed (Submitted + Saved) - ALL TIME
-        const totalCompleted = await ResumeInstance.countDocuments({
-            userId,
-            status: { $in: ["submitted", "saved", "approved"] }
-        });
-
-        // 3. Count Completed TODAY only
-        const todayCompleted = await ResumeInstance.countDocuments({
-            userId,
-            status: { $in: ["submitted", "saved"] },
-            updatedAt: { $gte: startOfToday } // Filter by timestamp
-        });
-
-        return {
-            success: true,
-            counts: {
-                total: totalCompleted,
-                today: todayCompleted
-            }
-        };
-    } catch (error) {
-        console.error("Error fetching work counts:", error);
-        return { success: false, counts: { total: 0, today: 0 } };
-    }
-}
-
-// ─────────────────────────────────────────────────────────────
-// ADD THIS FUNCTION to your existing @/app/actions/userWork.js
-// Place it after the autoAssignAndGetId function
-// ─────────────────────────────────────────────────────────────
-
 /**
- * skipResume
- *
- * Permanently skips the current resume for this user:
- *  - Deletes the in-progress instance (no formData saved anywhere)
- *  - Records a lightweight "skipped" marker so this resume is
- *    NEVER assigned to this user again
- *  - Decrements inProgressCount (we're closing without submitting)
- *  - Auto-assigns the next available resume
- */// app/actions/userWork.js
-
+ * Permanently skips the current resume for this user and auto-assigns the next
+ */
 export async function skipResume(resumeId, userId) {
     try {
         await connectDB();
 
-        // ── GUARD: Check plan expiry parameters ──────────────────────────
         const user = await User.findById(userId).select("endDate role stats").lean();
         if (!user) return { success: false, error: "User profile node not located." };
 
@@ -568,14 +461,12 @@ export async function skipResume(resumeId, userId) {
             };
         }
 
-        // ── STEP 1: Flip current instance to skipped marker state ──
-        // This removes it from ongoing calculations instantly
         await ResumeInstance.findOneAndUpdate(
             { resumeId, userId },
             {
                 $set: {
                     status: "skipped",
-                    formData: {},          // Wipe out any accidental partial text progress
+                    formData: {},
                     isTouched: false,
                     updatedAt: new Date(),
                 },
@@ -583,8 +474,6 @@ export async function skipResume(resumeId, userId) {
             { upsert: true }
         );
 
-        // ── STEP 2: Find next unworked resume tracking token ─────────────────────
-        // "workedResumes" now includes the skipped item, so it won't be repeated
         const workedResumes = await ResumeInstance.find({ userId }).distinct("resumeId");
 
         const nextResume = await Resume.findOne({
@@ -593,7 +482,6 @@ export async function skipResume(resumeId, userId) {
         });
 
         if (!nextResume) {
-            // No next resume — safely decrease ongoing work down by 1 and exit
             const statsUpdate = {};
             if (user.stats?.inProgressCount > 0) {
                 statsUpdate["stats.inProgressCount"] = -1;
@@ -609,8 +497,6 @@ export async function skipResume(resumeId, userId) {
             };
         }
 
-        // ── STEP 3: Assign next resume + execute atomic storage state changes ──
-        // Using an explicit $set locks the ongoing counter perfectly at 1, preventing double counts.
         await Promise.all([
             ResumeInstance.create({
                 userId,
@@ -622,9 +508,7 @@ export async function skipResume(resumeId, userId) {
                 $inc: { totalHits: 1 },
             }),
             User.findByIdAndUpdate(userId, {
-                $set: {
-                    "stats.inProgressCount": 1
-                }
+                $set: { "stats.inProgressCount": 1 }
             }),
         ]);
 
@@ -633,7 +517,7 @@ export async function skipResume(resumeId, userId) {
 
     } catch (error) {
         console.error("Skip Resume Error:", error);
-        
+
         if (error.code === 11000) {
             const existing = await ResumeInstance.findOne({
                 userId,

@@ -29,6 +29,7 @@ const UserSchema = new mongoose.Schema({
     rejectedCount: { type: Number, default: 0 },
     assignedCount: { type: Number, default: 0 },
     reviewCount: { type: Number, default: 0 },
+    savedCount: { type: Number, default: 0 }, 
   },
 
   // --- Status Trackers ---
@@ -38,4 +39,9 @@ const UserSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });
 
-export default mongoose.models.User || mongoose.model("User", UserSchema);
+// ✅ FORCE DELETION OF OLD CACHED MODEL COMPILATIONS
+if (mongoose.models.User) {
+    delete mongoose.models.User;
+}
+
+export default mongoose.model("User", UserSchema);
