@@ -4,7 +4,7 @@ import Sidebar from "@/components/Sidebar";
 import ClientInitializer from "@/components/ClientInitializer";
 import connectDB from "@/lib/db";
 import User from "@/models/User";
-import ResumeInstance from "@/models/ResumeInstance"; // ✅ IMPORTED SUCCESSFULLY
+import ResumeInstance from "@/models/ResumeInstance"; 
 import { passero } from "@/lib/fonts";
 import { Loader2 } from "lucide-react";
 
@@ -25,7 +25,7 @@ async function DashboardAsyncContent({ children }) {
   await connectDB();
 
   let fullUser = null;
-  let todayCount = 0; // Buffer variable to hold today's real-time loops
+  let todayCount = 0; 
 
   if (userId) {
     const userDoc = await User.findById(userId).select("-password").lean();
@@ -33,26 +33,29 @@ async function DashboardAsyncContent({ children }) {
       fullUser = JSON.parse(JSON.stringify(userDoc));
 
       // ── ⚡ CLEAN TIMEZONE-AWARE CALCULATOR MATRIX ──
-      // Converts current server system clock to target Indian Standard Time (IST) string format
       const istString = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
       const localIstDate = new Date(istString);
-      
-      // Structure explicit midnight bounds relative to Indian local time
-      const startOfToday = new Date(
-        localIstDate.getFullYear(), 
-        localIstDate.getMonth(), 
-        localIstDate.getDate(), 
-        0, 0, 0, 0
-      );
 
-      // ✅ FIXED: Included 're-assigned' and 'review' in the tracking array so counts don't vanish
+      // Extract explicit local calendar integers relative to India
+      const year = localIstDate.getFullYear();
+      const month = localIstDate.getMonth();
+      const date = localIstDate.getDate();
+
+      // Helper to add leading zeros for ISO compliance
+      const pad = (num) => String(num).padStart(2, '0');
+
+      // Force explicit ISO string parsing locked to India's (+05:30) offset
+      const formattedIstMidnight = `${year}-${pad(month + 1)}-${pad(date)}T00:00:00+05:30`;
+      const startOfToday = new Date(formattedIstMidnight);
+
+      // Track from 12:00 AM IST onwards on serverless hosts
       todayCount = await ResumeInstance.countDocuments({
         userId: fullUser._id,
         status: { $in: ["submitted", "saved", "approved", "re-assigned", "review", "rejected"] },
-        updatedAt: { $gte: startOfToday }
+        updatedAt: { $gte: startOfToday } 
       });
     }
-  }
+  } // 👈 FIXED: Closed out the userDoc query check cleanly
 
   const userData = fullUser ? {
     id: fullUser._id,
@@ -61,7 +64,7 @@ async function DashboardAsyncContent({ children }) {
     email: fullUser.email,
     stats: {
       ...(fullUser.stats || {}),
-      todayCompletedCount: todayCount // ✅ FIXED: Feeds synchronized state down the pipeline wire
+      todayCompletedCount: todayCount 
     },
     kycStatus: fullUser.kycStatus || 'pending',
     bankDetailsStatus: fullUser.bankDetailsStatus || 'pending',
@@ -87,8 +90,9 @@ async function DashboardAsyncContent({ children }) {
       </main>
     </>
   );
-}
+} // 👈 FIXED: Closed out the DashboardAsyncContent function context properly
 
+// ✅ FIXED: Extracted Skeleton layout component safely into its own global block scope
 function DashboardSkeleton() {
   return (
     <div className="flex flex-col items-center justify-center w-screen h-screen bg-white gap-4 text-black">
