@@ -346,7 +346,7 @@ export default function AdminUsersPage() {
                               </button>
                             )}
                             <button
-                              onClick={() => handleAccessUpdate(user._id, { daysToAdd: 7 })}
+                              onClick={() => handleAccessUpdate(user._id, { daysToAdd: 1})}
                               disabled={isUserActionLoading}
                               className="p-0.5 bg-white border border-zinc-200 rounded-md hover:border-black text-black transition-all cursor-pointer font-black"
                               title="+7 Days Extension"
