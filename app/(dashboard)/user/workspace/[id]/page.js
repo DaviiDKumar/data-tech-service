@@ -67,6 +67,13 @@ function WorkspaceContent() {
         return now > expiry;
     }, [userEndDate]);
 
+    // ✅ NEW: form-completeness check — every field in formData must be non-empty
+    const isFormComplete = useMemo(() => {
+        return Object.values(formData).every(
+            (v) => v !== null && v !== undefined && String(v).trim() !== ""
+        );
+    }, [formData]);
+
     // 1. Initial Data Load Sequence
     useEffect(() => {
         if (!id || id === "undefined" || !userId) return;
@@ -99,6 +106,13 @@ function WorkspaceContent() {
 
     const handleHoldSave = async () => {
         if (isReadOnly || globalError || isExpired || activeAction) return;
+
+        // ✅ NEW: block save until every field is filled
+        if (!isFormComplete) {
+            alert("Please fill in all fields before saving.");
+            return;
+        }
+
         setActiveAction('save');
 
         try {
@@ -122,6 +136,13 @@ function WorkspaceContent() {
 
     const handleSubmit = async () => {
         if (isReadOnly || globalError || isExpired || activeAction) return;
+
+        // ✅ NEW: block submit until every field is filled
+        if (!isFormComplete) {
+            alert("Please fill in all fields before submitting.");
+            return;
+        }
+
         if (!window.confirm("Submit this resume as final?")) return;
 
         setActiveAction('submit');
@@ -168,6 +189,7 @@ function WorkspaceContent() {
             setActiveAction(null);
         }
     };
+
     if (globalError || isExpired) {
         return (
             <div className="h-screen flex flex-col items-center justify-center p-10 text-center bg-slate-50 font-sans">
@@ -245,13 +267,13 @@ function WorkspaceContent() {
                             )}
                         </button>
 
-                        {/* HOLD & SAVE */}
                         {/* HOLD & SAVE BUTTON */}
                         <button
                             type="button" // 👈 CRUCIAL: Prevents the browser from misfiring this as a submit action
                             onClick={handleHoldSave}
-                            disabled={anyActionLoading}
-                            className="px-6 py-3 border-2 border-violet-600 bg-white text-violet-600 text-[10px] font-black uppercase tracking-[0.2em]"
+                            disabled={anyActionLoading || !isFormComplete}
+                            title={!isFormComplete ? "Fill in all fields to enable saving" : undefined}
+                            className="px-6 py-3 border-2 border-violet-600 bg-white text-violet-600 text-[10px] font-black uppercase tracking-[0.2em] disabled:opacity-30 disabled:cursor-not-allowed rounded-xl"
                         >
                             {activeAction === 'save' ? "Parking..." : "Hold & Save"}
                         </button>
@@ -259,8 +281,9 @@ function WorkspaceContent() {
                         {/* SUBMIT FINAL */}
                         <button
                             onClick={handleSubmit}
-                            disabled={anyActionLoading}
-                            className="group px-6 py-3 bg-emerald-600 border-2 border-emerald-600 text-white text-[10px] font-black uppercase tracking-[0.2em] cursor-pointer hover:bg-emerald-700 hover:border-emerald-700 transition-all duration-300 disabled:opacity-30 rounded-xl flex items-center justify-center min-w-[150px]"
+                            disabled={anyActionLoading || !isFormComplete}
+                            title={!isFormComplete ? "Fill in all fields to enable submission" : undefined}
+                            className="group px-6 py-3 bg-emerald-600 border-2 border-emerald-600 text-white text-[10px] font-black uppercase tracking-[0.2em] cursor-pointer hover:bg-emerald-700 hover:border-emerald-700 transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl flex items-center justify-center min-w-[150px]"
                         >
                             {activeAction === 'submit' ? (
                                 <Loader2 size={14} className="animate-spin" />
