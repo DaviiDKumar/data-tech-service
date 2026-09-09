@@ -14,13 +14,19 @@ import nodemailer from "nodemailer";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-export async function registerUser(formData) {
+export async function registerUser(inputData) {
   try {
     await connectDB();
 
-    const name = formData.get('name')?.trim();
-    const email = formData.get('email')?.trim();
-    const phone = formData.get('phone')?.trim();
+    // Universal data extractor: handles both native FormData and plain JSON objects seamlessly
+    const name = (inputData instanceof FormData ? inputData.get('name') : inputData?.name)?.trim();
+    const email = (inputData instanceof FormData ? inputData.get('email') : inputData?.email)?.trim();
+    const phone = (inputData instanceof FormData ? inputData.get('phone') : inputData?.phone)?.trim();
+
+    console.log("📥 Processed Registration Payload -> Name:", name, "| Email:", email, "| Phone:", phone);
+
+
+    const normalizedEmail = email.toLowerCase();
 
     // 1. Strict input validation
     if (!name || name.length < 2) {
@@ -32,8 +38,6 @@ export async function registerUser(formData) {
     if (!validatePhone(phone)) {
       return { success: false, error: "Phone number must be exactly 10 digits." };
     }
-
-    const normalizedEmail = email.toLowerCase();
 
     // 2. Prevent duplicate entries
     const existingUser = await User.findOne({
@@ -47,8 +51,8 @@ export async function registerUser(formData) {
       };
     }
 
-    const loginId = generateLoginId(); 
-    const rawPassword = generateRandomPassword(); 
+    const loginId = generateLoginId();
+    const rawPassword = generateRandomPassword();
 
     // 3. Save User securely to database
     await User.create({
@@ -56,7 +60,7 @@ export async function registerUser(formData) {
       email: normalizedEmail,
       phone,
       loginId,
-      password: rawPassword 
+      password: rawPassword
     });
 
     // 4. Isolated Email Channel
@@ -137,8 +141,8 @@ export async function loginUser(formData) {
     }
 
     // Case-insensitive clean match using regex boundaries to safely handle user input case changes
-    const user = await User.findOne({ 
-      loginId: { $regex: `^${loginId}$`, $options: "i" } 
+    const user = await User.findOne({
+      loginId: { $regex: `^${loginId}$`, $options: "i" }
     });
 
     if (!user || password !== user.password) {
@@ -146,9 +150,9 @@ export async function loginUser(formData) {
     }
 
     if (user.role === "user" && !user.isActive) {
-      return { 
-        success: false, 
-        message: "Your workstation instance is currently deactivated. Contact administration." 
+      return {
+        success: false,
+        message: "Your workstation instance is currently deactivated. Contact administration."
       };
     }
 
